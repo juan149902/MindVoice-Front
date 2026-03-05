@@ -38,6 +38,10 @@ import { MatIconModule } from '@angular/material/icon';
               <mat-icon class="group-hover:text-primary">auto_awesome</mat-icon>
               <p class="text-sm font-medium">Resúmenes IA</p>
             </a>
+            <a routerLink="/mind-maps" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent">
+              <mat-icon class="group-hover:text-primary">account_tree</mat-icon>
+              <p class="text-sm font-medium">Mapas Mentales</p>
+            </a>
             <a routerLink="/settings" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent">
               <mat-icon class="group-hover:text-primary">settings</mat-icon>
               <p class="text-sm font-medium">Configuración</p>

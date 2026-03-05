@@ -23,6 +23,10 @@ export const routes: Routes = [
         path: 'summaries', 
         loadComponent: () => import('./pages/summaries/summaries').then(m => m.SummariesComponent) 
       },
+      {
+        path: 'mind-maps',
+        loadComponent: () => import('./pages/mind-maps/mind-maps').then(m => m.MindMapsComponent)
+      },
       { 
         path: 'settings', 
         loadComponent: () => import('./pages/settings/settings').then(m => m.SettingsComponent) 
