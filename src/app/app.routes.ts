@@ -4,9 +4,17 @@ import { LayoutComponent } from './layout/layout';
 export const routes: Routes = [
   {
     path: '',
+    pathMatch: 'full',
+    loadComponent: () => import('./pages/landing/landing').then(m => m.LandingComponent)
+  },
+  {
+    path: 'auth',
+    loadComponent: () => import('./pages/auth/auth').then(m => m.AuthComponent)
+  },
+  {
+    path: '',
     component: LayoutComponent,
     children: [
-      { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
       { 
         path: 'dashboard', 
         loadComponent: () => import('./pages/dashboard/dashboard').then(m => m.DashboardComponent) 
