@@ -29,8 +29,29 @@ interface Point {
   selector: 'app-mind-maps',
   standalone: true,
   imports: [CommonModule, MatIconModule],
+  styles: [`
+    .node-enter {
+      animation: nodeIn 0.2s ease-out forwards;
+    }
+    @keyframes nodeIn {
+      from { opacity: 0; transform: translate(var(--nx), var(--ny)) scale(0.85); }
+      to   { opacity: 1; transform: translate(var(--nx), var(--ny)) scale(1); }
+    }
+    .canvas-dot-grid {
+      background-image: radial-gradient(circle, rgba(124,58,237,0.18) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .link-path-hover {
+      transition: stroke 0.15s;
+    }
+    .node-pending-source {
+      box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.7), 0 0 20px rgba(124,58,237,0.4);
+    }
+  `],
   template: `
     <div class="p-8 max-w-[1300px] mx-auto w-full">
+
+      <!-- Header -->
       <section class="mb-8 flex flex-wrap gap-4 items-end justify-between">
         <div>
           <h2 class="text-white text-3xl font-black tracking-tight">Mapas Mentales</h2>
@@ -40,31 +61,42 @@ interface Point {
           <button class="h-10 px-4 rounded-lg border border-border-dark bg-surface-dark text-sm font-semibold text-gray-200 hover:bg-white/5 transition-colors">
             Importar desde Resúmenes
           </button>
-          <button (click)="addNode()" class="h-10 px-4 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary-hover transition-colors flex items-center gap-2">
+
+          <button (click)="addNode()"
+            class="h-10 px-4 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary-hover transition-colors flex items-center gap-2"
+            title="Agregar nuevo cuadro al mapa">
             <mat-icon class="text-[18px]">add</mat-icon>
             Nuevo Cuadro
           </button>
+
           <button
             (click)="toggleLinkMode()"
-            class="h-10 px-4 rounded-lg border text-sm font-semibold transition-colors flex items-center gap-2"
-            [ngClass]="linkCreationMode ? 'border-primary text-primary bg-primary/10' : 'border-border-dark text-gray-200 bg-surface-dark hover:bg-white/5'"
+            class="h-10 px-4 rounded-lg border text-sm font-semibold transition-all flex items-center gap-2 relative"
+            [ngClass]="linkCreationMode
+              ? 'border-primary text-primary bg-primary/10 shadow-[0_0_12px_rgba(124,58,237,0.3)]'
+              : 'border-border-dark text-gray-200 bg-surface-dark hover:bg-white/5'"
+            [title]="linkCreationMode ? 'Haz clic en dos cuadros para conectarlos. ESC para cancelar.' : 'Modo conexión: une dos cuadros con una línea'"
           >
             <mat-icon class="text-[18px]">device_hub</mat-icon>
-            {{ linkCreationMode ? 'Conectando...' : 'Agregar Linea' }}
+            <span *ngIf="!linkCreationMode">Agregar Línea</span>
+            <span *ngIf="linkCreationMode && !pendingFromNodeId">Selecciona origen…</span>
+            <span *ngIf="linkCreationMode && pendingFromNodeId">Selecciona destino…</span>
           </button>
+
           <button
             (click)="deleteSelectedLink()"
             [disabled]="!selectedLinkId"
             class="h-10 px-4 rounded-lg border border-red-500/40 text-red-300 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-500/10 transition-colors flex items-center gap-2"
-          >
+            title="Borra la línea seleccionada (clic en una línea para seleccionarla)">
             <mat-icon class="text-[18px]">delete_outline</mat-icon>
-            Borrar Linea
+            Borrar Línea
           </button>
+
           <button
             (click)="deleteSelectedNode()"
             [disabled]="!selectedNodeId || selectedNodeId === 'root'"
             class="h-10 px-4 rounded-lg border border-red-500/40 text-red-300 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-500/10 transition-colors flex items-center gap-2"
-          >
+            [title]="selectedNodeId === 'root' ? 'El cuadro raíz no se puede borrar' : 'Borra el cuadro seleccionado y sus conexiones'">
             <mat-icon class="text-[18px]">delete</mat-icon>
             Borrar Cuadro
           </button>
@@ -72,6 +104,8 @@ interface Point {
       </section>
 
       <div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
+
+        <!-- Sidebar -->
         <aside class="xl:col-span-1 bg-surface-dark border border-white/5 rounded-2xl p-5 h-fit">
           <h3 class="text-white font-bold mb-4">Tus Mapas</h3>
           <div class="space-y-3">
@@ -85,31 +119,66 @@ interface Point {
             </button>
             <button class="w-full text-left p-3 rounded-xl border border-white/5 hover:border-primary/30 text-gray-200 hover:bg-white/5 transition-all">
               <p class="font-semibold">Plan de Contenido</p>
-              <p class="text-xs text-gray-500 mt-1">Actualizado hace 3 dias</p>
+              <p class="text-xs text-gray-500 mt-1">Actualizado hace 3 días</p>
             </button>
           </div>
 
           <div class="mt-6 pt-6 border-t border-border-dark">
-            <h4 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-3">Filtros Rapidos</h4>
+            <h4 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-3">Filtros Rápidos</h4>
             <div class="flex flex-wrap gap-2">
               <span class="px-2.5 py-1 rounded-full bg-primary/15 border border-primary/30 text-primary text-xs font-semibold">Ideas</span>
               <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 text-xs font-semibold">Tareas</span>
-              <span class="px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/25 text-blue-400 text-xs font-semibold">Resumenes</span>
+              <span class="px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/25 text-blue-400 text-xs font-semibold">Resúmenes</span>
+            </div>
+          </div>
+
+          <!-- Stats del mapa activo -->
+          <div class="mt-6 pt-6 border-t border-border-dark">
+            <h4 class="text-xs uppercase tracking-wider text-gray-500 font-bold mb-3">Mapa Actual</h4>
+            <div class="space-y-2">
+              <div class="flex justify-between items-center">
+                <span class="text-xs text-gray-400">Cuadros</span>
+                <span class="text-xs font-bold text-white bg-white/10 px-2 py-0.5 rounded-full">{{ nodes.length }}</span>
+              </div>
+              <div class="flex justify-between items-center">
+                <span class="text-xs text-gray-400">Conexiones</span>
+                <span class="text-xs font-bold text-white bg-white/10 px-2 py-0.5 rounded-full">{{ links.length }}</span>
+              </div>
             </div>
           </div>
         </aside>
 
+        <!-- Canvas principal -->
         <section class="xl:col-span-3 bg-surface-dark border border-white/5 rounded-2xl p-6 relative overflow-hidden min-h-[560px]">
+
+          <!-- Toolbar interna del canvas -->
           <div class="flex items-center justify-between mb-5">
             <div>
               <p class="text-xs text-primary font-bold uppercase tracking-wider">Mapa Activo</p>
               <h3 class="text-xl text-white font-bold">Estrategia Q2</h3>
             </div>
-            <div class="flex gap-2">
-              <button class="size-9 rounded-lg border border-border-dark text-gray-300 hover:bg-white/5 transition-colors flex items-center justify-center">
+            <div class="flex gap-2 items-center">
+              <!-- Indicador de modo activo -->
+              <div *ngIf="linkCreationMode"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/15 border border-primary/30 text-primary text-xs font-semibold animate-pulse">
+                <mat-icon class="text-[14px]">radio_button_checked</mat-icon>
+                {{ pendingFromNodeId ? 'Clic en destino' : 'Clic en origen' }}
+              </div>
+              <div *ngIf="selectedNodeId && !linkCreationMode"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-xs">
+                <mat-icon class="text-[14px]">crop_square</mat-icon>
+                {{ getNodeLabel(selectedNodeId) }}
+              </div>
+              <div *ngIf="selectedLinkId"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-gray-300 text-xs">
+                <mat-icon class="text-[14px]">linear_scale</mat-icon>
+                Línea seleccionada
+              </div>
+
+              <button class="size-9 rounded-lg border border-border-dark text-gray-300 hover:bg-white/5 transition-colors flex items-center justify-center" title="Zoom in">
                 <mat-icon class="text-[18px]">zoom_in</mat-icon>
               </button>
-              <button class="size-9 rounded-lg border border-border-dark text-gray-300 hover:bg-white/5 transition-colors flex items-center justify-center">
+              <button class="size-9 rounded-lg border border-border-dark text-gray-300 hover:bg-white/5 transition-colors flex items-center justify-center" title="Zoom out">
                 <mat-icon class="text-[18px]">zoom_out</mat-icon>
               </button>
               <button class="h-9 px-3 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-hover transition-colors flex items-center gap-1">
@@ -119,67 +188,149 @@ interface Point {
             </div>
           </div>
 
-          <div #canvasRef class="relative h-[460px] rounded-xl border border-border-dark bg-background-dark/60 overflow-hidden select-none" (click)="onCanvasClick()">
-            <svg [attr.viewBox]="'0 0 ' + canvasWidth + ' ' + canvasHeight" class="absolute inset-0 w-full h-full">
+          <!-- Lienzo -->
+          <div
+            #canvasRef
+            class="relative h-[460px] rounded-xl border border-border-dark bg-background-dark/60 canvas-dot-grid overflow-hidden select-none"
+            [ngClass]="linkCreationMode ? 'cursor-crosshair' : 'cursor-default'"
+            (click)="onCanvasClick()"
+          >
+            <!-- SVG para líneas -->
+            <svg [attr.viewBox]="'0 0 ' + canvasWidth + ' ' + canvasHeight"
+              class="absolute inset-0 w-full h-full pointer-events-none">
+              <defs>
+                <!-- Flecha para extremo de línea -->
+                <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L8,3 z" fill="#7c3aed" opacity="0.7"/>
+                </marker>
+                <marker id="arrow-selected" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L8,3 z" fill="#c4b5fd"/>
+                </marker>
+                <!-- Glow filter para línea seleccionada -->
+                <filter id="glow-link" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="2.5" result="blur"/>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+              </defs>
+
               <g *ngFor="let link of links; trackBy: trackLink">
+                <!-- Línea visible -->
                 <path
                   [attr.d]="getLinkPath(link)"
                   [attr.stroke]="selectedLinkId === link.id ? '#c4b5fd' : '#7c3aed'"
-                  stroke-width="2"
+                  [attr.stroke-width]="selectedLinkId === link.id ? 2.5 : 1.8"
+                  [attr.filter]="selectedLinkId === link.id ? 'url(#glow-link)' : null"
+                  [attr.marker-end]="selectedLinkId === link.id ? 'url(#arrow-selected)' : 'url(#arrow)'"
+                  [attr.stroke-dasharray]="selectedLinkId === link.id ? '0' : '0'"
+                  stroke-opacity="0.85"
                   fill="none"
                   stroke-linecap="round"
-                  class="pointer-events-none"
+                  class="link-path-hover"
                 />
+                <!-- Zona de clic invisible (más ancha) -->
                 <path
                   [attr.d]="getLinkPath(link)"
                   stroke="transparent"
-                  stroke-width="14"
+                  stroke-width="16"
                   fill="none"
-                  class="cursor-pointer"
+                  class="cursor-pointer pointer-events-all"
                   (click)="selectLink($event, link.id)"
                 />
-                <circle
-                  *ngIf="selectedLinkId === link.id"
-                  [attr.cx]="getLinkControlPoint(link).x"
-                  [attr.cy]="getLinkControlPoint(link).y"
-                  r="6"
-                  fill="#1f1533"
-                  stroke="#a78bfa"
-                  stroke-width="1.5"
-                  class="cursor-move"
-                  (pointerdown)="startLinkAdjust($event, link.id)"
-                />
+                <!-- Control point drag handle (solo visible cuando seleccionada) -->
+                <g *ngIf="selectedLinkId === link.id" class="pointer-events-all">
+                  <circle
+                    [attr.cx]="getLinkControlPoint(link).x"
+                    [attr.cy]="getLinkControlPoint(link).y"
+                    r="8"
+                    fill="rgba(31,21,51,0.9)"
+                    stroke="#a78bfa"
+                    stroke-width="1.5"
+                    class="cursor-move"
+                    (pointerdown)="startLinkAdjust($event, link.id)"
+                  />
+                  <circle
+                    [attr.cx]="getLinkControlPoint(link).x"
+                    [attr.cy]="getLinkControlPoint(link).y"
+                    r="3"
+                    fill="#a78bfa"
+                    class="pointer-events-none"
+                  />
+                </g>
               </g>
             </svg>
 
+            <!-- Nodos -->
             <div
               *ngFor="let node of nodes; trackBy: trackNode"
-              class="absolute cursor-grab active:cursor-grabbing rounded-xl px-4 py-2.5 border font-semibold shadow-lg"
-              [ngClass]="node.styleClass"
-              [class.ring-2]="selectedNodeId === node.id"
-              [class.ring-primary]="selectedNodeId === node.id"
+              class="absolute rounded-xl px-4 py-2.5 border font-semibold shadow-lg transition-shadow duration-150 node-enter"
+              [ngClass]="[
+                node.styleClass,
+                selectedNodeId === node.id ? 'ring-2 ring-primary shadow-[0_0_16px_rgba(124,58,237,0.35)]' : '',
+                pendingFromNodeId === node.id ? 'node-pending-source' : '',
+                linkCreationMode && pendingFromNodeId && pendingFromNodeId !== node.id ? 'hover:ring-2 hover:ring-violet-400/60' : '',
+                editingNodeId === node.id ? 'cursor-text' : 'cursor-grab active:cursor-grabbing'
+              ]"
               [style.width.px]="node.w"
               [style.height.px]="node.h"
               [style.transform]="'translate(' + node.x + 'px, ' + node.y + 'px)'"
+              [style.--nx]="node.x + 'px'"
+              [style.--ny]="node.y + 'px'"
               (pointerdown)="startDrag($event, node.id)"
               (click)="handleNodeClick($event, node.id)"
               (dblclick)="startNodeEdit($event, node.id)"
             >
-              <span *ngIf="editingNodeId !== node.id">{{ node.label }}</span>
+              <!-- Label o input de edición -->
+              <span *ngIf="editingNodeId !== node.id" class="block truncate text-sm leading-tight">
+                {{ node.label }}
+              </span>
               <input
                 *ngIf="editingNodeId === node.id"
                 class="w-full bg-transparent border-none outline-none text-current text-sm"
                 [value]="node.label"
                 (input)="updateNodeLabel(node.id, $event)"
                 (keydown.enter)="finishNodeEdit()"
+                (keydown.escape)="finishNodeEdit()"
                 (blur)="finishNodeEdit()"
                 (pointerdown)="$event.stopPropagation()"
                 autofocus
               />
+
+              <!-- Indicador "origen" en modo conexión -->
+              <span
+                *ngIf="pendingFromNodeId === node.id"
+                class="absolute -top-2 -right-2 size-4 rounded-full bg-primary border-2 border-background-dark flex items-center justify-center"
+                title="Cuadro origen seleccionado">
+                <mat-icon class="text-[10px] text-white">radio_button_checked</mat-icon>
+              </span>
+            </div>
+
+            <!-- Overlay de instrucción cuando no hay nodos -->
+            <div *ngIf="nodes.length === 0"
+              class="absolute inset-0 flex flex-col items-center justify-center gap-3 text-gray-500 pointer-events-none">
+              <mat-icon class="text-5xl opacity-30">account_tree</mat-icon>
+              <p class="text-sm">Haz clic en "Nuevo Cuadro" para comenzar</p>
             </div>
           </div>
 
-          <p class="text-xs text-gray-500 mt-3">Tip: doble clic para editar texto. Usa "Agregar Linea" y luego clic en 2 cuadros para crear conexiones. Selecciona una linea para mover su curva o borrarla.</p>
+          <!-- Footer de atajos -->
+          <div class="flex flex-wrap gap-x-5 gap-y-1 mt-3">
+            <span class="text-xs text-gray-500 flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono text-gray-400">2× clic</kbd>
+              Editar texto
+            </span>
+            <span class="text-xs text-gray-500 flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono text-gray-400">clic línea</kbd>
+              Seleccionar / mover curva
+            </span>
+            <span class="text-xs text-gray-500 flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono text-gray-400">ESC</kbd>
+              Cancelar modo
+            </span>
+            <span class="text-xs text-gray-500 flex items-center gap-1">
+              <kbd class="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px] font-mono text-gray-400">arrastrar</kbd>
+              Mover cuadros
+            </span>
+          </div>
         </section>
       </div>
     </div>
@@ -204,7 +355,7 @@ export class MindMapsComponent {
     },
     {
       id: 'market',
-      label: 'Investigacion de Mercado',
+      label: 'Investigación de Mercado',
       x: 90,
       y: 80,
       w: 220,
@@ -213,7 +364,7 @@ export class MindMapsComponent {
     },
     {
       id: 'priority',
-      label: 'Priorizacion de Features',
+      label: 'Priorización de Features',
       x: 90,
       y: 310,
       w: 220,
@@ -231,7 +382,7 @@ export class MindMapsComponent {
     },
     {
       id: 'execution',
-      label: 'Plan de Ejecucion',
+      label: 'Plan de Ejecución',
       x: 590,
       y: 310,
       w: 190,
@@ -241,9 +392,9 @@ export class MindMapsComponent {
   ];
 
   links: MindMapLink[] = [
-    { id: 'l1', from: 'root', to: 'market', curveOffsetX: 0, curveOffsetY: 0 },
-    { id: 'l2', from: 'root', to: 'priority', curveOffsetX: 0, curveOffsetY: 0 },
-    { id: 'l3', from: 'root', to: 'brand', curveOffsetX: 0, curveOffsetY: 0 },
+    { id: 'l1', from: 'root', to: 'market',    curveOffsetX: 0, curveOffsetY: 0 },
+    { id: 'l2', from: 'root', to: 'priority',  curveOffsetX: 0, curveOffsetY: 0 },
+    { id: 'l3', from: 'root', to: 'brand',     curveOffsetX: 0, curveOffsetY: 0 },
     { id: 'l4', from: 'root', to: 'execution', curveOffsetX: 0, curveOffsetY: 0 }
   ];
 
@@ -261,27 +412,40 @@ export class MindMapsComponent {
   private linkCounter = this.links.length;
   editingNodeId: string | null = null;
 
+  // ─── ESC cancela modo conexión ───
+  @HostListener('window:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      if (this.linkCreationMode) {
+        this.linkCreationMode = false;
+        this.pendingFromNodeId = null;
+      }
+      if (this.editingNodeId) {
+        this.finishNodeEdit();
+      }
+    }
+    if ((event.key === 'Delete' || event.key === 'Backspace') && !this.editingNodeId) {
+      if (this.selectedLinkId) {
+        this.deleteSelectedLink();
+      } else if (this.selectedNodeId && this.selectedNodeId !== 'root') {
+        this.deleteSelectedNode();
+      }
+    }
+  }
+
   trackNode = (_: number, node: MindMapNode): string => node.id;
   trackLink = (_: number, link: MindMapLink): string => link.id;
 
-  startDrag(event: PointerEvent, nodeId: string): void {
-    if (this.linkCreationMode) {
-      return;
-    }
+  getNodeLabel(nodeId: string): string {
+    return this.findNode(nodeId)?.label ?? '';
+  }
 
-    if (this.editingNodeId === nodeId) {
-      return;
-    }
+  startDrag(event: PointerEvent, nodeId: string): void {
+    if (this.linkCreationMode || this.editingNodeId === nodeId) return;
 
     const node = this.findNode(nodeId);
-    if (!node) {
-      return;
-    }
-
     const canvas = this.canvasRef?.nativeElement;
-    if (!canvas) {
-      return;
-    }
+    if (!node || !canvas) return;
 
     const rect = canvas.getBoundingClientRect();
     this.draggingNodeId = nodeId;
@@ -296,9 +460,7 @@ export class MindMapsComponent {
   startLinkAdjust(event: PointerEvent, linkId: string): void {
     const link = this.findLink(linkId);
     const canvasPoint = this.getCanvasPoint(event);
-    if (!link || !canvasPoint) {
-      return;
-    }
+    if (!link || !canvasPoint) return;
 
     const control = this.getLinkControlPoint(link);
     this.adjustingLinkId = linkId;
@@ -306,7 +468,7 @@ export class MindMapsComponent {
     this.linkOffsetX = canvasPoint.x - control.x;
     this.linkOffsetY = canvasPoint.y - control.y;
 
-    (event.target as HTMLElement).setPointerCapture(event.pointerId);
+    (event.target as SVGCircleElement).setPointerCapture(event.pointerId);
     event.preventDefault();
     event.stopPropagation();
   }
@@ -316,9 +478,7 @@ export class MindMapsComponent {
     if (this.adjustingLinkId) {
       const link = this.findLink(this.adjustingLinkId);
       const canvasPoint = this.getCanvasPoint(event);
-      if (!link || !canvasPoint) {
-        return;
-      }
+      if (!link || !canvasPoint) return;
 
       const { mid } = this.getLinkGeometry(link);
       link.curveOffsetX = canvasPoint.x - this.linkOffsetX - mid.x;
@@ -326,25 +486,15 @@ export class MindMapsComponent {
       return;
     }
 
-    if (!this.draggingNodeId) {
-      return;
-    }
+    if (!this.draggingNodeId) return;
 
     const canvas = this.canvasRef?.nativeElement;
     const node = this.findNode(this.draggingNodeId);
-    if (!canvas || !node) {
-      return;
-    }
+    if (!canvas || !node) return;
 
     const rect = canvas.getBoundingClientRect();
-    const maxX = this.canvasWidth - node.w;
-    const maxY = this.canvasHeight - node.h;
-
-    const nextX = event.clientX - rect.left - this.dragOffsetX;
-    const nextY = event.clientY - rect.top - this.dragOffsetY;
-
-    node.x = this.clamp(nextX, 0, maxX);
-    node.y = this.clamp(nextY, 0, maxY);
+    node.x = this.clamp(event.clientX - rect.left - this.dragOffsetX, 0, this.canvasWidth - node.w);
+    node.y = this.clamp(event.clientY - rect.top - this.dragOffsetY, 0, this.canvasHeight - node.h);
   }
 
   @HostListener('window:pointerup')
@@ -356,27 +506,31 @@ export class MindMapsComponent {
   addNode(): void {
     this.nodeCounter += 1;
     const nextId = `node-${this.nodeCounter}`;
+    const colors = [
+      'border-indigo-400/40 bg-indigo-500/10 text-indigo-300',
+      'border-cyan-400/40 bg-cyan-500/10 text-cyan-300',
+      'border-yellow-400/40 bg-yellow-500/10 text-yellow-300',
+      'border-rose-400/40 bg-rose-500/10 text-rose-300',
+    ];
     const newNode: MindMapNode = {
       id: nextId,
       label: `Idea ${this.nodeCounter - 4}`,
-      x: 320 + (this.nodes.length % 3) * 60,
-      y: 60 + (this.nodes.length % 4) * 70,
+      x: this.clamp(160 + (this.nodeCounter % 5) * 80, 0, this.canvasWidth - 160),
+      y: this.clamp(40 + (this.nodeCounter % 4) * 90, 0, this.canvasHeight - 52),
       w: 160,
       h: 52,
-      styleClass: 'border-indigo-400/40 bg-indigo-500/10 text-indigo-300'
+      styleClass: colors[this.nodeCounter % colors.length]
     };
 
     this.nodes = [...this.nodes, newNode];
     this.links = [
       ...this.links,
-      {
-        id: this.createLinkId(),
-        from: 'root',
-        to: nextId,
-        curveOffsetX: 0,
-        curveOffsetY: 0
-      }
+      { id: this.createLinkId(), from: 'root', to: nextId, curveOffsetX: 0, curveOffsetY: 0 }
     ];
+
+    // Seleccionar el nuevo nodo automáticamente
+    this.selectedNodeId = nextId;
+    this.selectedLinkId = null;
   }
 
   startNodeEdit(event: MouseEvent, nodeId: string): void {
@@ -385,13 +539,9 @@ export class MindMapsComponent {
   }
 
   updateNodeLabel(nodeId: string, event: Event): void {
-    const input = event.target as HTMLInputElement;
     const node = this.findNode(nodeId);
-    if (!node) {
-      return;
-    }
-
-    node.label = input.value;
+    if (!node) return;
+    node.label = (event.target as HTMLInputElement).value;
   }
 
   finishNodeEdit(): void {
@@ -406,39 +556,26 @@ export class MindMapsComponent {
 
   handleNodeClick(event: MouseEvent, nodeId: string): void {
     event.stopPropagation();
-
     this.selectedNodeId = nodeId;
     this.selectedLinkId = null;
 
-    if (!this.linkCreationMode) {
-      return;
-    }
+    if (!this.linkCreationMode) return;
 
     if (!this.pendingFromNodeId) {
       this.pendingFromNodeId = nodeId;
       return;
     }
-
-    if (this.pendingFromNodeId === nodeId) {
-      return;
-    }
+    if (this.pendingFromNodeId === nodeId) return;
 
     const exists = this.links.some(
-      link =>
-        (link.from === this.pendingFromNodeId && link.to === nodeId) ||
-        (link.from === nodeId && link.to === this.pendingFromNodeId)
+      l => (l.from === this.pendingFromNodeId && l.to === nodeId) ||
+           (l.from === nodeId && l.to === this.pendingFromNodeId)
     );
 
     if (!exists) {
       this.links = [
         ...this.links,
-        {
-          id: this.createLinkId(),
-          from: this.pendingFromNodeId,
-          to: nodeId,
-          curveOffsetX: 0,
-          curveOffsetY: 0
-        }
+        { id: this.createLinkId(), from: this.pendingFromNodeId, to: nodeId, curveOffsetX: 0, curveOffsetY: 0 }
       ];
     }
 
@@ -454,23 +591,16 @@ export class MindMapsComponent {
   }
 
   deleteSelectedLink(): void {
-    if (!this.selectedLinkId) {
-      return;
-    }
-
-    this.links = this.links.filter(link => link.id !== this.selectedLinkId);
+    if (!this.selectedLinkId) return;
+    this.links = this.links.filter(l => l.id !== this.selectedLinkId);
     this.selectedLinkId = null;
   }
 
   deleteSelectedNode(): void {
-    if (!this.selectedNodeId || this.selectedNodeId === 'root') {
-      return;
-    }
-
-    const nodeId = this.selectedNodeId;
-    this.nodes = this.nodes.filter(node => node.id !== nodeId);
-    this.links = this.links.filter(link => link.from !== nodeId && link.to !== nodeId);
-
+    if (!this.selectedNodeId || this.selectedNodeId === 'root') return;
+    const id = this.selectedNodeId;
+    this.nodes = this.nodes.filter(n => n.id !== id);
+    this.links = this.links.filter(l => l.from !== id && l.to !== id);
     this.selectedNodeId = null;
     this.selectedLinkId = null;
     this.pendingFromNodeId = null;
@@ -479,10 +609,7 @@ export class MindMapsComponent {
   onCanvasClick(): void {
     this.selectedNodeId = null;
     this.selectedLinkId = null;
-
-    if (!this.linkCreationMode) {
-      this.pendingFromNodeId = null;
-    }
+    if (!this.linkCreationMode) this.pendingFromNodeId = null;
   }
 
   getLinkPath(link: MindMapLink): string {
@@ -492,10 +619,7 @@ export class MindMapsComponent {
 
   getLinkControlPoint(link: MindMapLink): Point {
     const { mid } = this.getLinkGeometry(link);
-    return {
-      x: mid.x + link.curveOffsetX,
-      y: mid.y + link.curveOffsetY
-    };
+    return { x: mid.x + link.curveOffsetX, y: mid.y + link.curveOffsetY };
   }
 
   private getLinkGeometry(link: MindMapLink): { start: Point; end: Point; mid: Point; control: Point } {
@@ -510,56 +634,31 @@ export class MindMapsComponent {
     const toCenter = this.getNodeCenter(toNode);
     const start = this.getEdgePoint(fromNode, toCenter);
     const end = this.getEdgePoint(toNode, fromCenter);
-    const mid = {
-      x: (start.x + end.x) / 2,
-      y: (start.y + end.y) / 2
-    };
+    const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
 
-    return {
-      start,
-      end,
-      mid,
-      control: {
-        x: mid.x + link.curveOffsetX,
-        y: mid.y + link.curveOffsetY
-      }
-    };
+    return { start, end, mid, control: { x: mid.x + link.curveOffsetX, y: mid.y + link.curveOffsetY } };
   }
 
   private getNodeCenter(node: MindMapNode): Point {
-    return {
-      x: node.x + node.w / 2,
-      y: node.y + node.h / 2
-    };
+    return { x: node.x + node.w / 2, y: node.y + node.h / 2 };
   }
 
   private getEdgePoint(node: MindMapNode, toward: Point): Point {
     const center = this.getNodeCenter(node);
     const dx = toward.x - center.x;
     const dy = toward.y - center.y;
+    if (dx === 0 && dy === 0) return center;
 
-    if (dx === 0 && dy === 0) {
-      return center;
-    }
-
-    const halfW = node.w / 2;
-    const halfH = node.h / 2;
-    const tx = dx === 0 ? Number.POSITIVE_INFINITY : halfW / Math.abs(dx);
-    const ty = dy === 0 ? Number.POSITIVE_INFINITY : halfH / Math.abs(dy);
+    const tx = dx === 0 ? Infinity : (node.w / 2) / Math.abs(dx);
+    const ty = dy === 0 ? Infinity : (node.h / 2) / Math.abs(dy);
     const t = Math.min(tx, ty);
 
-    return {
-      x: center.x + dx * t,
-      y: center.y + dy * t
-    };
+    return { x: center.x + dx * t, y: center.y + dy * t };
   }
 
   private getCanvasPoint(event: PointerEvent): Point | null {
     const canvas = this.canvasRef?.nativeElement;
-    if (!canvas) {
-      return null;
-    }
-
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     return {
       x: this.clamp(event.clientX - rect.left, 0, this.canvasWidth),
@@ -567,8 +666,8 @@ export class MindMapsComponent {
     };
   }
 
-  private findLink(linkId: string): MindMapLink | undefined {
-    return this.links.find(link => link.id === linkId);
+  private findLink(id: string): MindMapLink | undefined {
+    return this.links.find(l => l.id === id);
   }
 
   private createLinkId(): string {
@@ -576,8 +675,8 @@ export class MindMapsComponent {
     return `l${this.linkCounter}`;
   }
 
-  private findNode(nodeId: string): MindMapNode | undefined {
-    return this.nodes.find(node => node.id === nodeId);
+  private findNode(id: string): MindMapNode | undefined {
+    return this.nodes.find(n => n.id === id);
   }
 
   private clamp(value: number, min: number, max: number): number {
