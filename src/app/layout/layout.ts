@@ -12,7 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
       <aside class="w-64 border-r border-border-dark bg-surface-dark flex flex-col shrink-0">
         <div class="p-6 flex flex-col h-full">
           <div class="flex items-center gap-3 mb-8">
-            <img src="icons/Logo1-96.png" alt="Logo MindVoice" class="size-12 rounded-xl object-cover ring-2 ring-primary/25 shadow-[0_0_15px_rgba(124,58,237,0.4)]" />
+            <img src="icons/Logo1.png" alt="Logo MindVoice" class="size-15 object-cover " />
             <div>
               <h1 class="text-white text-lg font-bold leading-tight tracking-tight">MindVoice</h1>
               <p class="text-gray-500 text-xs">Segundo Cerebro Digital</p>
