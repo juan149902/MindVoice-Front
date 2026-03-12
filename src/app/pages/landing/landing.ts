@@ -82,7 +82,7 @@ import { CommonModule } from '@angular/common';
               </p>
               <div class="hero-actions">
                 <a routerLink="/auth" class="cta-primary rounded-2xl px-7 py-3.5 text-white font-extrabold hover:scale-[1.03] transition-all">
-                  🚀 Probar ahora
+                   Probar ahora
                 </a>
                 <a routerLink="/dashboard" class="cta-secondary rounded-2xl px-7 py-3.5 font-semibold transition-all">
                   Ver demo interna →
@@ -137,8 +137,8 @@ import { CommonModule } from '@angular/common';
                   </div>
                 </div>
               </div>
-              <div class="float-badge float-badge-1 rounded-2xl px-4 py-3 text-sm font-bold">🧠 IA Analizada</div>
-              <div class="float-badge float-badge-2 rounded-2xl px-4 py-3 text-sm font-bold">✅ 3 tareas nuevas</div>
+              <div class="float-badge float-badge-1 rounded-2xl px-4 py-3 text-sm font-bold"> IA Analizada</div>
+              <div class="float-badge float-badge-2 rounded-2xl px-4 py-3 text-sm font-bold"> 3 tareas nuevas</div>
             </div>
           </div>
           <!-- Scroll hint -->
@@ -197,7 +197,7 @@ import { CommonModule } from '@angular/common';
                 [class.pricing-featured]="p.featured"
                 [style.animation-delay]="(i * 0.1) + 's'">
                 <div *ngIf="p.featured" class="featured-badge text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-4 inline-block">
-                  ⭐ Más popular
+                   Más popular
                 </div>
                 <h3 class="text-xl font-black text-white mb-1">{{p.name}}</h3>
                 <p class="text-slate-400 text-sm mb-4">{{p.desc}}</p>

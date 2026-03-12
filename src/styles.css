@@ -17,6 +17,61 @@ body {
   @apply bg-background-dark text-gray-100 font-display antialiased;
 }
 
+.theme-light {
+  --color-background-dark: #f4f7fb;
+  --color-surface-dark: #ffffff;
+  --color-border-dark: #d7e0ea;
+}
+
+.theme-light .text-white,
+.theme-light .text-gray-100 {
+  color: #0f172a !important;
+}
+
+.theme-light .text-gray-500 {
+  color: #64748b !important;
+}
+
+.theme-light .text-gray-400,
+.theme-light .text-gray-300 {
+  color: #475569 !important;
+}
+
+.theme-light .bg-white\/5 {
+  background-color: rgba(15, 23, 42, 0.04) !important;
+}
+
+.theme-light .border-white\/5 {
+  border-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+.theme-light .border-white\/10 {
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+.theme-light .hover\:bg-white\/5:hover {
+  background-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+.theme-light .hover\:text-white:hover {
+  color: #0f172a !important;
+}
+
+.theme-light .placeholder\:text-gray-500::placeholder {
+  color: #94a3b8 !important;
+}
+
+.theme-light .bg-primary {
+  background-color: rgba(124, 58, 237, 0.22) !important;
+  border-color: rgba(124, 58, 237, 0.46) !important;
+  color: #4c1d95 !important;
+}
+
+.theme-light .hover\:bg-primary-hover:hover {
+  background-color: rgba(124, 58, 237, 0.32) !important;
+  color: #3b0764 !important;
+}
+
 .material-symbols-outlined {
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
 }
