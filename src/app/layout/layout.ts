@@ -35,7 +35,7 @@ import { TokenStorageService } from '../core/services/token-storage.service';
               />
             </div>
             <div>
-              <h1 class="text-white text-lg font-bold leading-tight tracking-tight">MinddddddVoice</h1>
+              <h1 class="text-white text-lg font-bold leading-tight tracking-tight">MindVoice</h1>
               <p class="text-gray-500 text-xs">Segundo Cerebro Digital</p>
             </div>
             </div>
