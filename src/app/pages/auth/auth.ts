@@ -1,7 +1,10 @@
-import { Component, signal, OnInit, AfterViewInit, Inject, PLATFORM_ID } from '@angular/core';
+import { Component, signal, OnInit, AfterViewInit, Inject, PLATFORM_ID, inject } from '@angular/core';
 import { NgIf, NgFor } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { finalize } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   selector: 'app-auth',
@@ -59,6 +62,8 @@ import { FormsModule } from '@angular/forms';
                 <p class="form-sub">
                   {{ isRegister() ? 'Gratis para siempre en el plan básico' : 'Retoma donde lo dejaste' }}
                 </p>
+                <p class="feedback error" *ngIf="errorMessage">{{ errorMessage }}</p>
+                <p class="feedback success" *ngIf="successMessage">{{ successMessage }}</p>
               </div>
 
               <form class="auth-form" (submit)="$event.preventDefault()">
@@ -68,15 +73,30 @@ import { FormsModule } from '@angular/forms';
                   <div class="finput-wrap" [class.focused]="focusedField === 'name'">
                     <svg class="ficon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
                     <input class="finput" type="text" placeholder="Tu nombre completo"
+                      name="fullName"
+                      [(ngModel)]="fullName"
                       (focus)="focusedField='name'" (blur)="focusedField=''" />
                   </div>
                 </div>
 
                 <div class="field">
+                  <label class="flabel">Usuario</label>
+                  <div class="finput-wrap" [class.focused]="focusedField === 'username'">
+                    <svg class="ficon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="7" r="4"/></svg>
+                    <input class="finput" type="text" placeholder="tu_usuario"
+                      name="username"
+                      [(ngModel)]="username"
+                      (focus)="focusedField='username'" (blur)="focusedField=''" />
+                  </div>
+                </div>
+
+                <div class="field" *ngIf="isRegister()">
                   <label class="flabel">Correo electrónico</label>
                   <div class="finput-wrap" [class.focused]="focusedField === 'email'">
                     <svg class="ficon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/></svg>
                     <input class="finput" type="email" placeholder="nombre@correo.com"
+                      name="email"
+                      [(ngModel)]="email"
                       (focus)="focusedField='email'" (blur)="focusedField=''" />
                   </div>
                 </div>
@@ -89,6 +109,8 @@ import { FormsModule } from '@angular/forms';
                   <div class="finput-wrap" [class.focused]="focusedField === 'pass'">
                     <svg class="ficon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                     <input class="finput" [type]="showPass ? 'text' : 'password'"
+                      name="password"
+                      [(ngModel)]="password"
                       placeholder="••••••••"
                       (focus)="focusedField='pass'" (blur)="focusedField=''"
                       (input)="onPassInput($event)" />
@@ -333,6 +355,13 @@ import { FormsModule } from '@angular/forms';
       font-weight: 900; color: #fff; margin-bottom: 0.25rem;
     }
     .form-sub { font-size: 0.8rem; color: #64748b; }
+    .feedback {
+      margin-top: 0.6rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .feedback.error { color: #fda4af; }
+    .feedback.success { color: #86efac; }
 
     .auth-form { display: flex; flex-direction: column; gap: 0.875rem; }
 
@@ -509,6 +538,9 @@ import { FormsModule } from '@angular/forms';
   `]
 })
 export class AuthComponent implements OnInit, AfterViewInit {
+  private readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
+
   readonly isRegister = signal(false);
   showPass     = false;
   loading      = false;
@@ -516,12 +548,20 @@ export class AuthComponent implements OnInit, AfterViewInit {
   focusedField = '';
   passStrength  = 0;
   termsAccepted = false;
+  username = '';
+  fullName = '';
+  email = '';
+  password = '';
+  errorMessage = '';
+  successMessage = '';
   particles: string[] = [];
 
   constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
 
   toggleMode(): void {
     this.animating = true;
+    this.errorMessage = '';
+    this.successMessage = '';
     setTimeout(() => {
       this.isRegister.update(v => !v);
       this.animating = false;
@@ -531,8 +571,56 @@ export class AuthComponent implements OnInit, AfterViewInit {
   }
 
   handleSubmit(): void {
+    if (this.loading) {
+      return;
+    }
+
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    const username = this.username.trim();
+    if (!username || !this.password.trim()) {
+      this.errorMessage = 'Completa usuario y contraseña para continuar.';
+      return;
+    }
+
+    if (this.isRegister() && !this.fullName.trim()) {
+      this.errorMessage = 'Ingresa tu nombre completo para crear la cuenta.';
+      return;
+    }
+
+    if (this.isRegister() && !this.email.trim()) {
+      this.errorMessage = 'Ingresa tu correo para crear la cuenta.';
+      return;
+    }
+
+    if (this.isRegister() && !this.termsAccepted) {
+      this.errorMessage = 'Debes aceptar los términos y privacidad para registrarte.';
+      return;
+    }
+
     this.loading = true;
-    setTimeout(() => { this.loading = false; }, 2000);
+
+    if (this.isRegister()) {
+      this.authService.register({
+        username,
+        email: this.email.trim().toLowerCase(),
+        password: this.password,
+        name: this.fullName.trim(),
+      }).subscribe({
+        next: () => {
+          this.successMessage = 'Cuenta creada. Iniciando sesión...';
+          this.loginWithCredentials(username, this.password);
+        },
+        error: (error: HttpErrorResponse) => {
+          this.loading = false;
+          this.errorMessage = this.mapError(error, 'No se pudo crear la cuenta.');
+        },
+      });
+      return;
+    }
+
+    this.loginWithCredentials(username, this.password);
   }
 
   onPassInput(e: Event): void {
@@ -556,4 +644,29 @@ export class AuthComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit() {}
+
+  private loginWithCredentials(username: string, password: string): void {
+    this.authService.login({ username, password }).pipe(
+      finalize(() => {
+        this.loading = false;
+      }),
+    ).subscribe({
+      next: () => {
+        this.successMessage = 'Sesión iniciada correctamente.';
+        void this.router.navigate(['/dashboard']);
+      },
+      error: (error: HttpErrorResponse) => {
+        this.errorMessage = this.mapError(error, 'No se pudo iniciar sesión.');
+      },
+    });
+  }
+
+  private mapError(error: HttpErrorResponse, fallback: string): string {
+    const backendMessage = error.error?.message;
+    if (typeof backendMessage === 'string' && backendMessage.trim().length > 0) {
+      return backendMessage;
+    }
+
+    return fallback;
+  }
 }

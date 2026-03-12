@@ -1,5 +1,17 @@
-import { Component } from '@angular/core';
+import { Component, Inject, OnInit, PLATFORM_ID, inject } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
+import { HttpErrorResponse } from '@angular/common/http';
+import { ResourceApiService } from '../../core/services/resource-api.service';
+import { ApiEntity } from '../../core/models/api.models';
+import { TokenStorageService } from '../../core/services/token-storage.service';
+
+interface DashboardUser extends ApiEntity {
+  _id?: string;
+  username?: string;
+  email?: string;
+  name?: string;
+}
 
 @Component({
   selector: 'app-dashboard',
@@ -9,9 +21,11 @@ import { MatIconModule } from '@angular/material/icon';
     <div class="p-8 max-w-[1200px] mx-auto w-full">
       <section class="mb-10">
         <div class="flex flex-col gap-2">
-          <h2 class="text-4xl font-black tracking-tight text-white">Hola de nuevo, Alex</h2>
+          <h2 class="text-4xl font-black tracking-tight text-white">Bienvenido, {{ username }}</h2>
           <p class="text-gray-400 text-lg">Tu segundo cerebro digital está sincronizado y listo.</p>
         </div>
+
+        
       </section>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-12">
@@ -29,11 +43,11 @@ import { MatIconModule } from '@angular/material/icon';
           <div class="bg-surface-dark border border-white/5 rounded-xl p-6 flex flex-col justify-between hover:border-primary/20 transition-colors">
             <div>
               <p class="text-gray-400 text-sm font-medium">Tareas completadas</p>
-              <p class="text-3xl font-bold mt-1 text-white">48</p>
+              <p class="text-3xl font-bold mt-1 text-white">{{ users.length }}</p>
             </div>
             <div class="flex items-center gap-1 text-emerald-400 mt-4">
               <mat-icon class="text-sm">trending_up</mat-icon>
-              <span class="text-xs font-bold">+5% desde la semana pasada</span>
+              <span class="text-xs font-bold">Usuarios detectados en backend</span>
             </div>
           </div>
         </div>
@@ -159,4 +173,45 @@ import { MatIconModule } from '@angular/material/icon';
     </div>
   `
 })
-export class DashboardComponent {}
+export class DashboardComponent implements OnInit {
+  private readonly resourceApi = inject(ResourceApiService);
+  private readonly tokenStorage = inject(TokenStorageService);
+
+  constructor(@Inject(PLATFORM_ID) private readonly platformId: object) {}
+
+  loadingUsers = false;
+  loadError = '';
+  users: DashboardUser[] = [];
+  username = 'Usuario';
+
+  ngOnInit(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
+    this.username = this.tokenStorage.getUsername() ?? 'Usuario';
+
+    this.fetchUsers();
+  }
+
+  private fetchUsers(): void {
+    this.loadingUsers = true;
+    this.loadError = '';
+
+    this.resourceApi.list<DashboardUser>('users').subscribe({
+      next: (users) => {
+        this.users = users.slice(0, 8);
+        this.loadingUsers = false;
+      },
+      error: (error: HttpErrorResponse) => {
+        this.loadingUsers = false;
+        if (error.status === 401) {
+          this.loadError = 'No autorizado: inicia sesión para ver datos protegidos.';
+          return;
+        }
+
+        this.loadError = 'No se pudo cargar usuarios desde la API.';
+      },
+    });
+  }
+}
