@@ -158,8 +158,8 @@ import { CommonModule } from '@angular/common';
               <div *ngFor="let f of features; let i = index"
                 class="feature-card reveal rounded-3xl p-6 border border-white/10 hover:border-violet-500/40 transition-all hover:-translate-y-1 cursor-default"
                 [style.animation-delay]="(i * 0.1) + 's'">
-                <div class="feature-icon w-12 h-12 rounded-2xl flex items-center justify-center text-2xl mb-4">
-                  {{f.icon}}
+                <div class="feature-icon w-12 h-12 rounded-2xl flex items-center justify-center mb-4" aria-hidden="true">
+                  <span class="material-symbols-outlined feature-icon-symbol">{{f.icon}}</span>
                 </div>
                 <h3 class="font-bold text-white text-base mb-2">{{f.title}}</h3>
                 <p class="text-slate-400 text-sm leading-relaxed">{{f.desc}}</p>
@@ -233,7 +233,7 @@ import { CommonModule } from '@angular/common';
             </div>
 
             <!-- FOOTER dentro de la última sección -->
-            <footer class="border-t border-white/10 pt-6">
+            <footer class="footer-soft reveal border-t border-white/10 pt-6">
               <div class="flex flex-col md:flex-row items-center justify-between gap-3 text-sm text-slate-500">
                 <div class="flex items-center gap-2">
                   <img src="icons/Logo1-96.png" alt="MindVoice" class="w-7 h-7 object-cover" />
@@ -250,6 +250,7 @@ import { CommonModule } from '@angular/common';
   `,
   styles: [`
     @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,500,0,0');
 
     /* ─── BASE ──────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; }
@@ -520,11 +521,99 @@ import { CommonModule } from '@angular/common';
     @media(min-width:640px) { .features-grid { grid-template-columns: repeat(2,1fr); } }
     @media(min-width:1024px){ .features-grid { grid-template-columns: repeat(3,1fr); } }
 
-    .feature-card { background:linear-gradient(145deg, rgba(22,17,33,0.9), rgba(15,10,25,0.9)); }
-    .feature-icon { background:linear-gradient(135deg, rgba(124,58,237,0.2), rgba(6,182,212,0.2)); border:1px solid rgba(124,58,237,0.2); }
+    .feature-card {
+      background:linear-gradient(145deg, rgba(22,17,33,0.9), rgba(15,10,25,0.9));
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.32s ease, border-color 0.32s ease, box-shadow 0.32s ease;
+      box-shadow: 0 8px 20px rgba(2,6,23,0.22);
+    }
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: -40%;
+      left: -130%;
+      width: 55%;
+      height: 180%;
+      background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.12) 45%, transparent 100%);
+      transform: rotate(10deg);
+      transition: left 0.55s ease;
+      pointer-events: none;
+    }
+    .feature-card:hover {
+      transform: translateY(-8px) scale(1.01);
+      border-color: rgba(167,139,250,0.55) !important;
+      box-shadow: 0 16px 34px rgba(2,6,23,0.4), 0 0 24px rgba(124,58,237,0.2);
+    }
+    .feature-card:hover::before { left: 140%; }
+
+    .feature-icon {
+      background:linear-gradient(135deg, rgba(124,58,237,0.2), rgba(6,182,212,0.2));
+      border:1px solid rgba(124,58,237,0.2);
+      transition: transform 0.32s ease, box-shadow 0.32s ease, border-color 0.32s ease, background 0.32s ease;
+    }
+    .feature-card:hover .feature-icon {
+      transform: translateY(-2px) rotate(-5deg) scale(1.08);
+      border-color: rgba(167,139,250,0.48);
+      background: linear-gradient(135deg, rgba(124,58,237,0.34), rgba(6,182,212,0.28));
+      box-shadow: 0 8px 18px rgba(124,58,237,0.24);
+    }
+    .material-symbols-outlined {
+      font-family: 'Material Symbols Outlined';
+      font-weight: normal;
+      font-style: normal;
+      font-size: 24px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-feature-settings: 'liga';
+      font-feature-settings: 'liga';
+      -webkit-font-smoothing: antialiased;
+    }
+    .feature-icon-symbol {
+      font-size: 1.6rem;
+      line-height: 1;
+      font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+      color: #ddd6fe;
+      transition: transform 0.3s ease, color 0.3s ease;
+    }
+    .feature-card:hover .feature-icon-symbol { transform: scale(1.08); color: #ffffff; }
+    .feature-card h3,
+    .feature-card p { transition: color 0.28s ease, transform 0.28s ease; }
+    .feature-card:hover h3 { color: #c4b5fd; transform: translateX(2px); }
+    .feature-card:hover p { color: #cbd5e1; transform: translateX(2px); }
 
     /* ─── STATS BANNER ──────────────────────────────────────────── */
-    .stats-banner { background:linear-gradient(135deg, rgba(124,58,237,0.1), rgba(6,182,212,0.05)); backdrop-filter:blur(8px); }
+    .stats-banner {
+      background:linear-gradient(135deg, rgba(124,58,237,0.1), rgba(6,182,212,0.05));
+      backdrop-filter:blur(8px);
+      box-shadow: 0 16px 40px rgba(2,6,23,0.28);
+    }
+    .stats-banner > div {
+      padding: 0.85rem 0.65rem;
+      border-radius: 1rem;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(15,23,42,0.16);
+      transition: transform 0.3s ease, border-color 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+      animation: statFloat 4.5s ease-in-out infinite;
+    }
+    .stats-banner > div:nth-child(2) { animation-delay: 0.2s; }
+    .stats-banner > div:nth-child(3) { animation-delay: 0.4s; }
+    .stats-banner > div:nth-child(4) { animation-delay: 0.6s; }
+    .stats-banner > div:hover {
+      transform: translateY(-6px) scale(1.02);
+      border-color: rgba(167,139,250,0.45);
+      background: rgba(76,29,149,0.2);
+      box-shadow: 0 12px 24px rgba(15,23,42,0.35);
+    }
+    .stats-banner > div p:first-child,
+    .stats-banner > div p:last-child { transition: transform 0.28s ease, color 0.28s ease; }
+    .stats-banner > div:hover p:first-child { transform: scale(1.04); }
+    .stats-banner > div:hover p:last-child { color: #d1d5db; }
 
     /* ─── PRICING GRID ──────────────────────────────────────────── */
     .pricing-grid {
@@ -534,12 +623,71 @@ import { CommonModule } from '@angular/common';
     }
     @media(min-width:768px){ .pricing-grid { grid-template-columns: repeat(3,1fr); } }
 
-    .pricing-card { background:linear-gradient(145deg, rgba(22,17,33,0.9), rgba(15,10,25,0.9)); border-color:rgba(255,255,255,0.08); }
-    .pricing-featured { border-color:rgba(124,58,237,0.5) !important; box-shadow:0 0 40px rgba(124,58,237,0.15); }
+    .pricing-card {
+      background:linear-gradient(145deg, rgba(22,17,33,0.9), rgba(15,10,25,0.9));
+      border-color:rgba(255,255,255,0.08);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease;
+    }
+    .pricing-card::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      background: linear-gradient(130deg, rgba(167,139,250,0), rgba(167,139,250,0.2), rgba(56,189,248,0));
+      opacity: 0;
+      transition: opacity 0.35s ease;
+      pointer-events: none;
+    }
+    .pricing-card:hover {
+      transform: translateY(-8px);
+      border-color: rgba(167,139,250,0.4);
+      box-shadow: 0 18px 36px rgba(2,6,23,0.42);
+    }
+    .pricing-card:hover::before { opacity: 1; }
+    .pricing-card li { transition: transform 0.25s ease, color 0.25s ease; }
+    .pricing-card:hover li { color: #e2e8f0; }
+    .pricing-card:hover li:hover { transform: translateX(4px); }
+
+    .pricing-featured {
+      border-color:rgba(124,58,237,0.5) !important;
+      box-shadow:0 0 40px rgba(124,58,237,0.15);
+      animation: featuredPulse 3.2s ease-in-out infinite;
+    }
     .featured-badge { background:linear-gradient(135deg,#7c3aed,#6d28d9); color:white; }
 
     /* ─── CTA FINAL ─────────────────────────────────────────────── */
-    .cta-final { background:linear-gradient(135deg, rgba(124,58,237,0.12), rgba(6,182,210,0.06)); backdrop-filter:blur(8px); }
+    .cta-final {
+      background:linear-gradient(135deg, rgba(124,58,237,0.12), rgba(6,182,210,0.06));
+      backdrop-filter:blur(8px);
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease;
+    }
+    .cta-final::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 20% 20%, rgba(167,139,250,0.2), transparent 45%);
+      opacity: 0.75;
+      pointer-events: none;
+      animation: ctaGlow 6s ease-in-out infinite;
+    }
+    .cta-final:hover {
+      transform: translateY(-4px);
+      border-color: rgba(167,139,250,0.4);
+      box-shadow: 0 18px 38px rgba(2,6,23,0.35);
+    }
+
+    .footer-soft {
+      opacity: 0.9;
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .footer-soft:hover {
+      opacity: 1;
+      transform: translateY(-2px);
+    }
 
     /* ─── REVEAL ────────────────────────────────────────────────── */
     .reveal { opacity:0; transform:translateY(30px); transition:opacity 0.7s ease, transform 0.7s ease; }
@@ -604,6 +752,26 @@ import { CommonModule } from '@angular/common';
       50%{ opacity:1; }
       100%{ opacity:0; transform:rotate(45deg) translateY(4px); }
     }
+    @keyframes statFloat {
+      0%,100%{ transform: translateY(0); }
+      50%{ transform: translateY(-4px); }
+    }
+    @keyframes featuredPulse {
+      0%,100%{ box-shadow: 0 0 40px rgba(124,58,237,0.15); }
+      50%{ box-shadow: 0 0 55px rgba(124,58,237,0.32); }
+    }
+    @keyframes ctaGlow {
+      0%,100%{ transform: translateX(0) translateY(0); opacity: 0.55; }
+      50%{ transform: translateX(8px) translateY(-6px); opacity: 0.95; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .stats-banner > div,
+      .pricing-featured,
+      .cta-final::after {
+        animation: none !important;
+      }
+    }
   `]
 })
 export class LandingComponent implements OnInit, AfterViewInit {
@@ -614,12 +782,12 @@ export class LandingComponent implements OnInit, AfterViewInit {
   menuOpen = false;
 
   features = [
-    { icon: '🎙️', title: 'Captura de Voz', desc: 'Graba ideas al instante desde cualquier dispositivo. MP3 optimizado con subida automática a la nube.' },
-    { icon: '🤖', title: 'Análisis con IA', desc: 'Transcripción automática y generación de resúmenes ejecutivos, tareas y mapas mentales con un clic.' },
-    { icon: '🗂️', title: 'Organización Inteligente', desc: 'Carpetas, etiquetas y búsqueda semántica. Encuentra cualquier idea en segundos.' },
-    { icon: '🗺️', title: 'Mapas Mentales', desc: 'Convierte automáticamente tus ideas habladas en diagramas visuales interactivos con Mermaid.js.' },
-    { icon: '📊', title: 'Dashboard Completo', desc: 'Panel web responsive con métricas, historial y acceso a todos tus materiales organizados.' },
-    { icon: '🔐', title: 'Seguridad Total', desc: 'Autenticación JWT, cifrado AES-256 y cumplimiento GDPR/HIPAA para proteger tus datos.' },
+    { icon: 'mic', title: 'Captura de Voz', desc: 'Graba ideas al instante desde cualquier dispositivo. MP3 optimizado con subida automática a la nube.' },
+    { icon: 'psychology', title: 'Análisis con IA', desc: 'Transcripción automática y generación de resúmenes ejecutivos, tareas y mapas mentales con un clic.' },
+    { icon: 'folder_managed', title: 'Organización Inteligente', desc: 'Carpetas, etiquetas y búsqueda semántica. Encuentra cualquier idea en segundos.' },
+    { icon: 'account_tree', title: 'Mapas Mentales', desc: 'Convierte automáticamente tus ideas habladas en diagramas visuales interactivos con Mermaid.js.' },
+    { icon: 'monitoring', title: 'Dashboard Completo', desc: 'Panel web responsive con métricas, historial y acceso a todos tus materiales organizados.' },
+    { icon: 'verified_user', title: 'Seguridad Total', desc: 'Autenticación JWT, cifrado AES-256 y cumplimiento GDPR/HIPAA para proteger tus datos.' },
   ];
 
   stats = [
