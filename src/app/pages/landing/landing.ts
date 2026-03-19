@@ -1,4 +1,4 @@
-import { Component, OnInit, AfterViewInit, Inject, PLATFORM_ID } from '@angular/core';
+import { Component, OnInit, AfterViewInit, OnDestroy, Inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -774,10 +774,11 @@ import { CommonModule } from '@angular/common';
     }
   `]
 })
-export class LandingComponent implements OnInit, AfterViewInit {
+export class LandingComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private readonly botpressInjectScriptId = 'botpress-webchat-inject';
   private readonly botpressConfigScriptId = 'botpress-webchat-config';
+  private destroyed = false;
 
   particles: string[] = [];
   seeds = ['Alex', 'Maria', 'Juan', 'Sofia', 'Pedro'];
@@ -820,6 +821,7 @@ export class LandingComponent implements OnInit, AfterViewInit {
   toggleMenu() { this.menuOpen = !this.menuOpen; }
 
   ngOnInit() {
+    this.destroyed = false;
     this.particles = Array.from({ length: 18 }, () => {
       const size = Math.random() * 4 + 2;
       const left = Math.random() * 100;
@@ -875,6 +877,12 @@ export class LandingComponent implements OnInit, AfterViewInit {
     });
   }
 
+  ngOnDestroy(): void {
+    if (!isPlatformBrowser(this.platformId)) return;
+    this.destroyed = true;
+    this.unloadBotpressChat();
+  }
+
   private loadBotpressChat(): void {
     if (document.getElementById(this.botpressInjectScriptId)) return;
 
@@ -883,6 +891,10 @@ export class LandingComponent implements OnInit, AfterViewInit {
     injectScript.src = 'https://cdn.botpress.cloud/webchat/v3.6/inject.js';
 
     injectScript.onload = () => {
+      if (this.destroyed) {
+        return;
+      }
+
       if (document.getElementById(this.botpressConfigScriptId)) return;
 
       const configScript = document.createElement('script');
@@ -894,4 +906,32 @@ export class LandingComponent implements OnInit, AfterViewInit {
 
     document.body.appendChild(injectScript);
   }
+
+  private unloadBotpressChat(): void {
+    const botpressGlobal = (globalThis as any).botpress;
+    botpressGlobal?.destroy?.();
+    botpressGlobal?.shutdown?.();
+    botpressGlobal?.webchat?.hide?.();
+    botpressGlobal?.webchat?.close?.();
+
+    document.getElementById(this.botpressConfigScriptId)?.remove();
+    document.getElementById(this.botpressInjectScriptId)?.remove();
+
+    document.querySelectorAll([
+      'iframe[src*="botpress"]',
+      'iframe[src*="bpcontent.cloud"]',
+      'div[id*="bp-web-widget"]',
+      'div[id*="botpress"]',
+      'div[class*="bpWebchat"]',
+      'div[class*="bp-widget"]',
+      'div[class*="botpress"]',
+      'button[class*="bp"]',
+      'button[class*="botpress"]',
+      'bp-web-widget',
+      'bp-widget',
+      'style[data-botpress]',
+      'style[id*="botpress"]',
+    ].join(',')).forEach((node) => node.remove());
+  }
+
 }
