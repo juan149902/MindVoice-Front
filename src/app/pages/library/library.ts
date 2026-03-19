@@ -1,177 +1,438 @@
-import { Component } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { ChangeDetectorRef, Component, OnInit, PLATFORM_ID, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { MatIconModule } from '@angular/material/icon';
+import { ApiEntity } from '../../core/models/api.models';
+import { ResourceApiService } from '../../core/services/resource-api.service';
+import { TokenStorageService } from '../../core/services/token-storage.service';
+
+interface FolderEntity extends ApiEntity {
+  _id?: string;
+  userId?: string;
+  parentFolderId?: string;
+  name?: string;
+  createdAt?: string;
+  created_at?: string;
+  updatedAt?: string;
+  updated_at?: string;
+}
+
+type SortMode = 'newest' | 'oldest' | 'name';
 
 @Component({
   selector: 'app-library',
   standalone: true,
-  imports: [MatIconModule],
+  imports: [CommonModule, FormsModule, MatIconModule],
   template: `
-    <div class="flex h-full">
-      <div class="flex-1 flex flex-col bg-background-dark overflow-hidden">
-        <div class="px-8 py-6 shrink-0">
-          <div class="flex justify-between items-center mb-6">
-            <div class="flex items-center gap-6">
-              <h1 class="text-2xl font-bold text-white">Mi Biblioteca</h1>
-            </div>
-            <div class="flex gap-3">
-              <button class="flex items-center gap-2 px-4 h-10 border border-border-dark bg-surface-dark rounded-lg text-sm font-semibold hover:bg-border-dark/80 transition-colors">
-                <mat-icon class="text-lg">sort</mat-icon>
-                <span>Ordenar por Fecha</span>
-              </button>
-              <button class="flex items-center justify-center rounded-lg h-10 bg-primary text-white gap-2 text-sm font-bold px-5 shadow-lg shadow-primary/20 hover:bg-primary-hover transition-all">
-                <mat-icon>add</mat-icon>
-                <span>Nueva Grabación</span>
-              </button>
-            </div>
+    <div class="p-8 max-w-[1200px] mx-auto w-full space-y-6">
+      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 p-6 shadow-2xl">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h1 class="text-3xl font-black text-white tracking-tight">Biblioteca de Carpetas</h1>
+            <p class="text-sm text-gray-400 mt-1">Solo muestra datos guardados por la API.</p>
           </div>
-        </div>
-
-        <div class="flex-1 overflow-y-auto px-8 pb-8">
-          <div class="bg-surface-dark rounded-xl border border-border-dark shadow-2xl overflow-hidden">
-            <table class="w-full text-left">
-              <thead>
-                <tr class="bg-border-dark/30 border-b border-border-dark">
-                  <th class="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest w-24">Onda</th>
-                  <th class="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Detalles</th>
-                  <th class="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Duración</th>
-                  <th class="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Etiquetas</th>
-                  <th class="px-6 py-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest">Estado IA</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-border-dark/50">
-                <tr class="bg-primary/10 hover:bg-primary/15 cursor-pointer transition-colors group">
-                  <td class="px-6 py-5">
-                    <div class="w-16 h-8 flex items-end gap-1">
-                      <div class="w-1 bg-primary h-2 rounded-full"></div>
-                      <div class="w-1 bg-primary h-5 rounded-full"></div>
-                      <div class="w-1 bg-primary h-3 rounded-full"></div>
-                      <div class="w-1 bg-primary h-7 rounded-full"></div>
-                      <div class="w-1 bg-primary h-4 rounded-full"></div>
-                    </div>
-                  </td>
-                  <td class="px-6 py-5">
-                    <div class="flex flex-col">
-                      <span class="font-semibold text-white">Estrategia Lanzamiento Q4</span>
-                      <span class="text-xs text-gray-500">28 Oct, 2023 • 10:45 AM</span>
-                    </div>
-                  </td>
-                  <td class="px-6 py-5 text-sm font-medium text-gray-400">08:12</td>
-                  <td class="px-6 py-5">
-                    <div class="flex gap-2">
-                      <span class="px-2 py-0.5 bg-border-dark rounded text-[10px] font-bold text-gray-400">ESTRATEGIA</span>
-                    </div>
-                  </td>
-                  <td class="px-6 py-5">
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">
-                      <span class="size-1.5 rounded-full bg-green-400"></span>
-                      PROCESADO
-                    </span>
-                  </td>
-                </tr>
-                <tr class="hover:bg-border-dark/40 cursor-pointer transition-colors group">
-                  <td class="px-6 py-5">
-                    <div class="w-16 h-8 flex items-end gap-1">
-                      <div class="w-1 bg-gray-600 h-4 rounded-full group-hover:bg-primary/50 transition-colors"></div>
-                      <div class="w-1 bg-gray-600 h-6 rounded-full group-hover:bg-primary/50 transition-colors"></div>
-                      <div class="w-1 bg-gray-600 h-5 rounded-full group-hover:bg-primary/50 transition-colors"></div>
-                      <div class="w-1 bg-gray-600 h-3 rounded-full group-hover:bg-primary/50 transition-colors"></div>
-                    </div>
-                  </td>
-                  <td class="px-6 py-5">
-                    <div class="flex flex-col">
-                      <span class="font-semibold text-white">Brainstorming App UI</span>
-                      <span class="text-xs text-gray-500">27 Oct, 2023 • 15:20 PM</span>
-                    </div>
-                  </td>
-                  <td class="px-6 py-5 text-sm font-medium text-gray-400">15:20</td>
-                  <td class="px-6 py-5">
-                    <div class="flex gap-2">
-                      <span class="px-2 py-0.5 bg-border-dark rounded text-[10px] font-bold text-gray-400">DISEÑO</span>
-                    </div>
-                  </td>
-                  <td class="px-6 py-5">
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-primary/10 text-primary animate-pulse border border-primary/20">
-                      <span class="size-1.5 rounded-full bg-primary"></span>
-                      EN PROCESO...
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      <!-- Detail Sidebar (Simulated open) -->
-      <aside class="w-[450px] border-l border-border-dark bg-surface-dark flex flex-col z-20 shadow-2xl shrink-0">
-        <div class="p-6 border-b border-border-dark">
-          <div class="flex justify-between items-start mb-4">
-            <div class="flex flex-col gap-1">
-              <h2 class="text-lg font-bold text-white leading-tight">Estrategia Lanzamiento Q4</h2>
-              <p class="text-xs text-gray-500">Grabado el 28 de Oct, 2023 • 10:45 AM</p>
-            </div>
-            <button class="text-gray-500 hover:text-white transition-colors">
-              <mat-icon>close</mat-icon>
+          <div class="flex items-center gap-3">
+            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Orden</label>
+            <select
+              [(ngModel)]="sortMode"
+              (ngModelChange)="applySort()"
+              class="h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-200">
+              <option value="newest">Mas recientes</option>
+              <option value="oldest">Mas antiguas</option>
+              <option value="name">Nombre A-Z</option>
+            </select>
+            <button
+              type="button"
+              class="h-10 px-4 rounded-lg border border-border-dark text-sm font-semibold text-gray-300 hover:bg-border-dark/70 transition-colors"
+              (click)="loadFolders()"
+              [disabled]="loading || submitting">
+              <span class="inline-flex items-center gap-2">
+                <mat-icon class="text-lg">refresh</mat-icon>
+                Recargar
+              </span>
             </button>
           </div>
-          
-          <div class="bg-background-dark/80 rounded-xl p-4 flex flex-col gap-3 border border-border-dark">
-            <div class="flex items-center gap-4">
-              <button class="size-10 bg-primary rounded-full flex items-center justify-center text-white shadow-lg shadow-primary/30 hover:scale-105 transition-transform">
-                <mat-icon>play_arrow</mat-icon>
-              </button>
-              <div class="flex-1 h-1.5 bg-border-dark rounded-full relative">
-                <div class="absolute inset-y-0 left-0 w-1/3 bg-primary rounded-full"></div>
-                <div class="absolute top-1/2 left-1/3 size-3 bg-primary rounded-full -translate-x-1/2 -translate-y-1/2 shadow-md"></div>
-              </div>
-              <span class="text-[10px] font-mono font-medium text-gray-400">02:14 / 08:12</span>
-            </div>
+        </div>
+
+        <form class="mt-5 grid grid-cols-1 lg:grid-cols-4 gap-3" (submit)="$event.preventDefault(); createFolder()">
+          <div class="lg:col-span-3">
+            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Nombre</label>
+            <input
+              [(ngModel)]="newFolderName"
+              name="newFolderName"
+              type="text"
+              maxlength="120"
+              class="mt-1 w-full h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-100"
+              placeholder="Ej. Reuniones del equipo" />
+          </div>
+          <div class="lg:col-span-1 flex items-end">
+            <button
+              type="submit"
+              class="w-full h-10 rounded-lg bg-primary text-white font-bold hover:bg-primary-hover transition-colors disabled:opacity-70"
+              [disabled]="submitting || loading">
+              <span class="inline-flex items-center gap-2">
+                <mat-icon class="text-lg">create_new_folder</mat-icon>
+                Crear
+              </span>
+            </button>
+          </div>
+        </form>
+
+        <p *ngIf="errorMessage" class="mt-4 text-sm text-rose-400">{{ errorMessage }}</p>
+        <p *ngIf="successMessage" class="mt-4 text-sm text-emerald-400">{{ successMessage }}</p>
+      </section>
+
+      <section class="rounded-2xl border border-white/10 bg-surface-dark/60 p-4 md:p-6 min-h-[280px]">
+        <div *ngIf="loading" class="h-48 flex items-center justify-center text-gray-400">
+          <span class="inline-flex items-center gap-2">
+            <mat-icon class="animate-spin">autorenew</mat-icon>
+            Cargando carpetas...
+          </span>
+        </div>
+
+        <div *ngIf="!loading && folders.length === 0" class="h-48 flex items-center justify-center text-center text-gray-400">
+          <div>
+            <mat-icon class="text-4xl text-primary mb-2">folder_open</mat-icon>
+            <p class="text-base font-semibold text-gray-300">No hay carpetas registradas</p>
+            <p class="text-sm">Crea tu primera carpeta para empezar.</p>
           </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
-          <div class="flex gap-4 border-b border-border-dark pb-0.5">
-            <button class="text-xs font-bold border-b-2 border-primary pb-2 text-primary">Transcripción</button>
-            <button class="text-xs font-medium text-gray-500 pb-2 hover:text-white transition-colors">Resumen</button>
-            <button class="text-xs font-medium text-gray-500 pb-2 hover:text-white transition-colors">Tareas</button>
-          </div>
-
-          <div class="space-y-6">
-            <div class="group relative">
-              <div class="flex justify-between items-center mb-2">
-                <span class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Editor de Transcripción</span>
-                <button class="text-gray-500 hover:text-primary transition-colors flex items-center gap-1">
-                  <mat-icon class="text-xs">edit</mat-icon>
-                  <span class="text-[10px] font-bold">EDITAR</span>
-                </button>
+        <div *ngIf="!loading && folders.length > 0" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <article
+            *ngFor="let folder of folders; let idx = index; trackBy: trackByFolder"
+            class="rounded-xl border border-border-dark bg-background-dark/70 p-4 hover:border-primary/35 hover:shadow-xl hover:shadow-primary/10 transition-all">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2 min-w-0">
+                <mat-icon class="text-primary">folder</mat-icon>
+                <h3 class="text-white font-bold text-base leading-tight break-words truncate">{{ folder.name || 'Sin nombre' }}</h3>
               </div>
-              <div class="p-4 bg-background-dark rounded-lg border border-border-dark text-gray-300 text-sm leading-relaxed min-h-[200px] focus-within:border-primary/50 transition-all">
-                <p class="mb-4">
-                  "Entonces, pensando en el lanzamiento del cuarto trimestre, realmente necesitamos redoblar esfuerzos en la comunidad de creadores. He notado que nuestro proceso de incorporación actual es demasiado complejo para usuarios no técnicos."
-                </p>
-                <p>
-                  "Quizás deberíamos implementar un botón de 'resumen por IA con un solo clic' justo después de que termine la grabación. Esto daría valor inmediato sin que el usuario tenga que navegar por menús."
-                </p>
-              </div>
-            </div>
-
-            <div class="flex flex-col gap-3">
-              <p class="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Acciones de IA</p>
-              <div class="grid grid-cols-2 gap-2">
-                <button class="flex items-center gap-2 p-3 bg-border-dark/30 border border-border-dark rounded-lg text-xs font-semibold hover:bg-primary/5 hover:border-primary/30 transition-all group">
-                  <mat-icon class="text-primary text-lg group-hover:scale-110 transition-transform">auto_awesome</mat-icon>
-                  <span>Ver Resumen</span>
+              <div class="flex items-center gap-1">
+                <button
+                  type="button"
+                  class="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+                  (click)="startEdit(folder)">
+                  <mat-icon class="text-lg">edit</mat-icon>
                 </button>
-                <button class="flex items-center gap-2 p-3 bg-border-dark/30 border border-border-dark rounded-lg text-xs font-semibold hover:bg-primary/5 hover:border-primary/30 transition-all group">
-                  <mat-icon class="text-primary text-lg group-hover:scale-110 transition-transform">task_alt</mat-icon>
-                  <span>Tareas</span>
+                <button
+                  type="button"
+                  class="p-1.5 rounded-md text-gray-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                  (click)="deleteFolder(folder)"
+                  [disabled]="deletingId === getFolderId(folder)">
+                  <mat-icon class="text-lg">delete</mat-icon>
                 </button>
               </div>
             </div>
-          </div>
+
+            <form *ngIf="editingId === getFolderId(folder)" class="mt-3 space-y-3" (submit)="$event.preventDefault(); saveEdit(folder)">
+              <input
+                [(ngModel)]="editName"
+                name="editName-{{idx}}"
+                type="text"
+                maxlength="120"
+                class="w-full h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-100"
+                placeholder="Nombre de carpeta" />
+              <div class="flex gap-2 justify-end">
+                <button type="button" class="h-9 px-3 rounded-md border border-border-dark text-sm text-gray-300 hover:bg-border-dark/70" (click)="cancelEdit()">Cancelar</button>
+                <button
+                  type="submit"
+                  class="h-9 px-3 rounded-md bg-primary text-white text-sm font-semibold hover:bg-primary-hover disabled:opacity-70"
+                  [disabled]="savingId === getFolderId(folder)">
+                  Guardar
+                </button>
+              </div>
+            </form>
+          </article>
         </div>
-      </aside>
+      </section>
     </div>
   `
 })
-export class LibraryComponent {}
+export class LibraryComponent implements OnInit {
+  private readonly resourceApi = inject(ResourceApiService);
+  private readonly tokenStorage = inject(TokenStorageService);
+  private readonly platformId = inject(PLATFORM_ID);
+  private readonly cdr = inject(ChangeDetectorRef);
+
+  folders: FolderEntity[] = [];
+  sortMode: SortMode = 'newest';
+  loading = false;
+  submitting = false;
+  savingId = '';
+  deletingId = '';
+
+  newFolderName = '';
+  editingId = '';
+  editName = '';
+
+  errorMessage = '';
+  successMessage = '';
+  currentUserId = '';
+
+  ngOnInit(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
+    this.loadFolders();
+  }
+
+  loadFolders(): void {
+    this.loading = true;
+    this.errorMessage = '';
+
+    this.resourceApi.list<FolderEntity>('folders').subscribe({
+      next: (folders) => {
+        this.folders = folders.slice();
+        if (!this.currentUserId) {
+          this.currentUserId = this.folders.find((folder) => !!folder.userId)?.userId ?? '';
+        }
+        this.applySort();
+        this.loading = false;
+        this.cdr.markForCheck();
+        console.log('[LIBRARY] Folders loaded successfully:', this.folders.length);
+      },
+      error: (error: HttpErrorResponse) => {
+        console.error('[LIBRARY] Failed to load folders:', error.status, error.error);
+        this.loading = false;
+        
+        if (error.status === 401) {
+          this.errorMessage = 'Sesión expirada. Por favor inicia sesión de nuevo.';
+        } else if (error.status === 0) {
+          this.errorMessage = 'No hay conexión con la API. Verifica la conexión a internet.';
+        } else {
+          this.errorMessage = this.mapError(error, 'No se pudieron cargar las carpetas.');
+        }
+      },
+    });
+  }
+
+  applySort(): void {
+    this.folders = this.folders.slice().sort((a, b) => {
+      if (this.sortMode === 'name') {
+        return (a.name ?? '').localeCompare(b.name ?? '', 'es', { sensitivity: 'base' });
+      }
+
+      const first = this.getFolderTimestamp(a);
+      const second = this.getFolderTimestamp(b);
+      return this.sortMode === 'oldest' ? first - second : second - first;
+    });
+  }
+
+  createFolder(): void {
+    if (!this.ensureCurrentUserId()) {
+      return;
+    }
+
+    const name = this.newFolderName.trim();
+    if (!name) {
+      this.errorMessage = 'El nombre de la carpeta es obligatorio.';
+      return;
+    }
+
+    this.submitting = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    const payload: { userId: string; name: string } = {
+      userId: this.currentUserId,
+      name,
+    };
+
+    this.resourceApi.create<FolderEntity, { userId: string; name: string }>('folders', payload).subscribe({
+      next: (created) => {
+        this.submitting = false;
+        this.newFolderName = '';
+        this.successMessage = 'Carpeta creada correctamente.';
+        this.folders = [created, ...this.folders];
+        this.applySort();
+        this.cdr.markForCheck();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.submitting = false;
+        this.errorMessage = this.mapError(error, 'No se pudo crear la carpeta.');
+      },
+    });
+  }
+
+  startEdit(folder: FolderEntity): void {
+    this.editingId = this.getFolderId(folder);
+    this.editName = (folder.name ?? '').trim();
+    this.errorMessage = '';
+    this.successMessage = '';
+  }
+
+  cancelEdit(): void {
+    this.editingId = '';
+    this.editName = '';
+  }
+
+  saveEdit(folder: FolderEntity): void {
+    if (!this.ensureCurrentUserId()) {
+      return;
+    }
+
+    const id = this.getFolderId(folder);
+    if (!id) {
+      this.errorMessage = 'La carpeta seleccionada no tiene identificador valido.';
+      return;
+    }
+
+    const name = this.editName.trim();
+    if (!name) {
+      this.errorMessage = 'El nombre de la carpeta no puede quedar vacio.';
+      return;
+    }
+
+    this.savingId = id;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    const payload: { userId: string; name: string; parentFolderId?: string } = {
+      userId: folder.userId ?? this.currentUserId,
+      name,
+    };
+    if (folder.parentFolderId && typeof folder.parentFolderId === 'string') {
+      payload.parentFolderId = folder.parentFolderId;
+    }
+
+    this.resourceApi.update<FolderEntity, { userId: string; name: string; parentFolderId?: string }>('folders', id, payload).subscribe({
+      next: (updated) => {
+        this.folders = this.folders.map((item) => (this.getFolderId(item) === id ? { ...item, ...updated } : item));
+        this.savingId = '';
+        this.cancelEdit();
+        this.applySort();
+        this.successMessage = 'Carpeta actualizada correctamente.';
+        this.cdr.markForCheck();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.savingId = '';
+        this.errorMessage = this.mapError(error, 'No se pudo actualizar la carpeta.');
+      },
+    });
+  }
+
+  deleteFolder(folder: FolderEntity): void {
+    const id = this.getFolderId(folder);
+    if (!id) {
+      this.errorMessage = 'La carpeta seleccionada no tiene identificador valido.';
+      return;
+    }
+
+    const name = folder.name ?? 'esta carpeta';
+    if (!globalThis.confirm(`Eliminar ${name}? Esta accion no se puede deshacer.`)) {
+      return;
+    }
+
+    this.deletingId = id;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    this.resourceApi.remove('folders', id).subscribe({
+      next: () => {
+        this.folders = this.folders.filter((item) => this.getFolderId(item) !== id);
+        this.deletingId = '';
+        this.successMessage = 'Carpeta eliminada correctamente.';
+        this.cdr.markForCheck();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.deletingId = '';
+        this.errorMessage = this.mapError(error, 'No se pudo eliminar la carpeta.');
+      },
+    });
+  }
+
+  trackByFolder(index: number, folder: FolderEntity): string {
+    return folder._id ?? `${folder.name ?? 'folder'}-${index}`;
+  }
+
+  getFolderId(folder: FolderEntity): string {
+    return folder._id ?? '';
+  }
+
+  private ensureCurrentUserId(): boolean {
+    if (this.currentUserId) {
+      return true;
+    }
+
+    this.resolveCurrentUserId();
+    if (this.currentUserId) {
+      return true;
+    }
+
+    this.currentUserId = this.folders.find((folder) => !!folder.userId)?.userId ?? '';
+    if (this.currentUserId) {
+      return true;
+    }
+
+    this.errorMessage = 'No se pudo determinar el userId de la sesion. Vuelve a iniciar sesion.';
+    return false;
+  }
+
+  private resolveCurrentUserId(): void {
+    if (this.currentUserId) {
+      return;
+    }
+
+    const token = this.tokenStorage.getToken();
+    if (!token) {
+      return;
+    }
+
+    const fromToken = this.extractUserIdFromToken(token);
+    if (fromToken) {
+      this.currentUserId = fromToken;
+    }
+  }
+
+  private extractUserIdFromToken(token: string): string {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1])) as Record<string, unknown>;
+      const candidates = [payload['userId'], payload['user_id'], payload['id'], payload['_id'], payload['sub']];
+      const userId = candidates.find((value) => typeof value === 'string' && value.trim().length > 0) as string | undefined;
+      return userId?.trim() ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  private getFolderTimestamp(folder: FolderEntity): number {
+    const source = folder.createdAt ?? folder.created_at ?? folder.updatedAt ?? folder.updated_at;
+    if (!source) {
+      return 0;
+    }
+
+    const date = new Date(source);
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+  }
+
+  private mapError(error: HttpErrorResponse, fallback: string): string {
+    const details = error.error?.detail;
+    if (Array.isArray(details) && details.length > 0) {
+      const first = details[0] as { msg?: string; loc?: unknown[] };
+      const msg = typeof first?.msg === 'string' ? first.msg : 'Solicitud invalida.';
+      const field = Array.isArray(first?.loc) ? first.loc.at(-1) : undefined;
+      if (typeof field === 'string') {
+        return `${msg} Campo: ${field}.`;
+      }
+      return msg;
+    }
+
+    const backendMessage = error.error?.message;
+    if (typeof backendMessage === 'string' && backendMessage.trim().length > 0) {
+      return backendMessage;
+    }
+
+    if (error.status === 0) {
+      return 'No hay conexion con la API. Revisa la URL base y CORS.';
+    }
+
+    if (error.status === 422) {
+      const fallbackDetails = typeof error.error === 'object' ? JSON.stringify(error.error) : String(error.error ?? '');
+      return fallbackDetails ? `La API rechazo los datos (422): ${fallbackDetails}` : 'La API rechazo los datos enviados (422).';
+    }
+
+    return fallback;
+  }
+}

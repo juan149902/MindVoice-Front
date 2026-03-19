@@ -24,6 +24,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/library/library').then(m => m.LibraryComponent) 
       },
       { 
+        path: 'tags', 
+        loadComponent: () => import('./pages/tags/tags').then(m => m.TagsComponent) 
+      },
+      { 
         path: 'tasks', 
         loadComponent: () => import('./pages/tasks/tasks').then(m => m.TasksComponent) 
       },

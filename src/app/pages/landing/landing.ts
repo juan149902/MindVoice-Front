@@ -776,6 +776,9 @@ import { CommonModule } from '@angular/common';
 })
 export class LandingComponent implements OnInit, AfterViewInit {
 
+  private readonly botpressInjectScriptId = 'botpress-webchat-inject';
+  private readonly botpressConfigScriptId = 'botpress-webchat-config';
+
   particles: string[] = [];
   seeds = ['Alex', 'Maria', 'Juan', 'Sofia', 'Pedro'];
   isScrolled = false;
@@ -829,6 +832,8 @@ export class LandingComponent implements OnInit, AfterViewInit {
   ngAfterViewInit() {
     if (!isPlatformBrowser(this.platformId)) return;
 
+    this.loadBotpressChat();
+
     // ── Header se oscurece al hacer scroll ──
     const scrollEl = document.querySelector('.scroll-container');
     if (scrollEl) {
@@ -868,5 +873,25 @@ export class LandingComponent implements OnInit, AfterViewInit {
         }
       });
     });
+  }
+
+  private loadBotpressChat(): void {
+    if (document.getElementById(this.botpressInjectScriptId)) return;
+
+    const injectScript = document.createElement('script');
+    injectScript.id = this.botpressInjectScriptId;
+    injectScript.src = 'https://cdn.botpress.cloud/webchat/v3.6/inject.js';
+
+    injectScript.onload = () => {
+      if (document.getElementById(this.botpressConfigScriptId)) return;
+
+      const configScript = document.createElement('script');
+      configScript.id = this.botpressConfigScriptId;
+      configScript.src = 'https://files.bpcontent.cloud/2026/03/19/03/20260319032156-J2CWLMTK.js';
+      configScript.defer = true;
+      document.body.appendChild(configScript);
+    };
+
+    document.body.appendChild(injectScript);
   }
 }

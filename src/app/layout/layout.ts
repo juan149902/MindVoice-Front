@@ -60,6 +60,10 @@ import { TokenStorageService } from '../core/services/token-storage.service';
               <mat-icon class="group-hover:text-primary">mic</mat-icon>
               <p class="text-sm font-medium">Grabaciones</p>
             </a>
+            <a routerLink="/tags" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
+              <mat-icon class="group-hover:text-primary">local_offer</mat-icon>
+              <p class="text-sm font-medium">Etiquetas</p>
+            </a>
             <a routerLink="/tasks" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
               <mat-icon class="group-hover:text-primary">check_box</mat-icon>
               <p class="text-sm font-medium">Tareas de Voz</p>

@@ -656,7 +656,14 @@ export class AuthComponent implements OnInit, AfterViewInit {
         void this.router.navigate(['/dashboard']);
       },
       error: (error: HttpErrorResponse) => {
-        this.errorMessage = this.mapError(error, 'No se pudo iniciar sesión.');
+        console.error('[AUTH] Login failed:', error.status, error.error);
+        if (error.status === 401) {
+          this.errorMessage = 'Usuario o contraseña incorrectos. Intenta de nuevo.';
+        } else if (error.status === 0) {
+          this.errorMessage = 'No hay conexión con el servidor. Verifica la conexión.';
+        } else {
+          this.errorMessage = this.mapError(error, 'No se pudo iniciar sesión.');
+        }
       },
     });
   }
