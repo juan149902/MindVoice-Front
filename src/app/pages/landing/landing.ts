@@ -239,7 +239,7 @@ import { CommonModule } from '@angular/common';
                   <img src="icons/Logo1-96.png" alt="MindVoice" class="w-7 h-7 object-cover" />
                   <span>MindVoice © 2026</span>
                 </div>
-                <p>Segundo Cerebro Digital — Hecho con 💜 en Tijuana</p>
+                <p>Segundo Cerebro Digital — Hecho con 💜 en Tijuana , choco maldad</p>u
               </div>
             </footer>
           </div>
