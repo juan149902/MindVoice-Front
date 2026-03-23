@@ -1,4 +1,4 @@
-import { Component, HostListener, Inject, OnInit, PLATFORM_ID, inject, signal } from '@angular/core';
+import { Component, HostListener, Inject, OnDestroy, OnInit, PLATFORM_ID, inject, signal } from '@angular/core';
 import { isPlatformBrowser, NgClass, NgIf } from '@angular/common';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -151,11 +151,14 @@ import { TokenStorageService } from '../core/services/token-storage.service';
     </div>
   `
 })
-export class LayoutComponent implements OnInit {
+export class LayoutComponent implements OnInit, OnDestroy {
   readonly isMobile = signal(false);
   readonly isSidebarOpen = signal(true);
   readonly themeMode = signal<'dark' | 'light'>('dark');
   readonly currentUsername = signal<string>('');
+  private readonly botpressInjectScriptId = 'botpress-webchat-inject';
+  private readonly botpressConfigScriptId = 'botpress-webchat-config';
+  private destroyed = false;
 
   private readonly authService = inject(AuthService);
   private readonly tokenStorage = inject(TokenStorageService);
@@ -166,9 +169,23 @@ export class LayoutComponent implements OnInit {
   ) {}
 
   ngOnInit(): void {
+    this.destroyed = false;
     this.restoreTheme();
     this.syncViewportState();
     this.currentUsername.set(this.tokenStorage.getUsername() ?? 'Usuario');
+
+    if (isPlatformBrowser(this.platformId)) {
+      this.loadBotpressChat();
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
+    this.destroyed = true;
+    this.unloadBotpressChat();
   }
 
   @HostListener('window:resize')
@@ -246,5 +263,56 @@ export class LayoutComponent implements OnInit {
     if (storedTheme === 'light' || storedTheme === 'dark') {
       this.themeMode.set(storedTheme);
     }
+  }
+
+  private loadBotpressChat(): void {
+    if (document.getElementById(this.botpressInjectScriptId)) return;
+
+    const injectScript = document.createElement('script');
+    injectScript.id = this.botpressInjectScriptId;
+    injectScript.src = 'https://cdn.botpress.cloud/webchat/v3.6/inject.js';
+
+    injectScript.onload = () => {
+      if (this.destroyed) {
+        return;
+      }
+
+      if (document.getElementById(this.botpressConfigScriptId)) return;
+
+      const configScript = document.createElement('script');
+      configScript.id = this.botpressConfigScriptId;
+      configScript.src = 'https://files.bpcontent.cloud/2026/03/19/03/20260319032156-J2CWLMTK.js';
+      configScript.defer = true;
+      document.body.appendChild(configScript);
+    };
+
+    document.body.appendChild(injectScript);
+  }
+
+  private unloadBotpressChat(): void {
+    const botpressGlobal = (globalThis as any).botpress;
+    botpressGlobal?.destroy?.();
+    botpressGlobal?.shutdown?.();
+    botpressGlobal?.webchat?.hide?.();
+    botpressGlobal?.webchat?.close?.();
+
+    document.getElementById(this.botpressConfigScriptId)?.remove();
+    document.getElementById(this.botpressInjectScriptId)?.remove();
+
+    document.querySelectorAll([
+      'iframe[src*="botpress"]',
+      'iframe[src*="bpcontent.cloud"]',
+      'div[id*="bp-web-widget"]',
+      'div[id*="botpress"]',
+      'div[class*="bpWebchat"]',
+      'div[class*="bp-widget"]',
+      'div[class*="botpress"]',
+      'button[class*="bp"]',
+      'button[class*="botpress"]',
+      'bp-web-widget',
+      'bp-widget',
+      'style[data-botpress]',
+      'style[id*="botpress"]',
+    ].join(',')).forEach((node) => node.remove());
   }
 }

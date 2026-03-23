@@ -1,5 +1,5 @@
-import { Component, signal, OnInit, AfterViewInit, Inject, PLATFORM_ID, inject } from '@angular/core';
-import { NgIf, NgFor } from '@angular/common';
+import { Component, signal, OnInit, OnDestroy, AfterViewInit, Inject, PLATFORM_ID, inject } from '@angular/core';
+import { NgIf, NgFor, isPlatformBrowser } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
@@ -537,9 +537,12 @@ import { AuthService } from '../../core/services/auth.service';
     }
   `]
 })
-export class AuthComponent implements OnInit, AfterViewInit {
+export class AuthComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly botpressInjectScriptId = 'botpress-webchat-inject';
+  private readonly botpressConfigScriptId = 'botpress-webchat-config';
+  private botpressCleanupTimer: number | null = null;
 
   readonly isRegister = signal(false);
   showPass     = false;
@@ -634,6 +637,16 @@ export class AuthComponent implements OnInit, AfterViewInit {
   }
 
   ngOnInit() {
+    if (isPlatformBrowser(this.platformId)) {
+      document.body.classList.add('auth-hide-chatbot');
+      this.unloadBotpressChat();
+
+      // Guard against delayed Botpress injections while staying on auth routes.
+      this.botpressCleanupTimer = window.setInterval(() => {
+        this.unloadBotpressChat();
+      }, 300);
+    }
+
     this.particles = Array.from({ length: 18 }, () => {
       const size = Math.random() * 4 + 2;
       const left = Math.random() * 100;
@@ -644,6 +657,17 @@ export class AuthComponent implements OnInit, AfterViewInit {
   }
 
   ngAfterViewInit() {}
+
+  ngOnDestroy(): void {
+    if (isPlatformBrowser(this.platformId)) {
+      document.body.classList.remove('auth-hide-chatbot');
+    }
+
+    if (this.botpressCleanupTimer !== null && isPlatformBrowser(this.platformId)) {
+      window.clearInterval(this.botpressCleanupTimer);
+      this.botpressCleanupTimer = null;
+    }
+  }
 
   private loginWithCredentials(username: string, password: string): void {
     this.authService.login({ username, password }).pipe(
@@ -675,5 +699,68 @@ export class AuthComponent implements OnInit, AfterViewInit {
     }
 
     return fallback;
+  }
+
+  private unloadBotpressChat(): void {
+    const botpressGlobal = (globalThis as any).botpress;
+    botpressGlobal?.destroy?.();
+    botpressGlobal?.shutdown?.();
+    botpressGlobal?.webchat?.hide?.();
+    botpressGlobal?.webchat?.close?.();
+
+    document.getElementById(this.botpressConfigScriptId)?.remove();
+    document.getElementById(this.botpressInjectScriptId)?.remove();
+
+    document.querySelectorAll([
+      '.bpChatContainer',
+      '#fab-root',
+      '#message-preview-root',
+      '#webchat-root',
+      '#bp-unread-message-count',
+      'iframe[src*="botpress"]',
+      'iframe[src*="bpcontent.cloud"]',
+      'div[id*="bp-web-widget"]',
+      'div[id*="botpress"]',
+      'div[class*="bpWebchat"]',
+      'div[class*="bp-widget"]',
+      'div[class*="botpress"]',
+      'button[class*="bp"]',
+      'button[class*="botpress"]',
+      'bp-web-widget',
+      'bp-widget',
+      'style[data-botpress]',
+      'style[id*="botpress"]',
+    ].join(',')).forEach((node) => node.remove());
+
+    this.removeLikelyFloatingChatLaunchers();
+  }
+
+  private removeLikelyFloatingChatLaunchers(): void {
+    const allNodes = Array.from(document.querySelectorAll<HTMLElement>('iframe, button, div, aside'));
+
+    allNodes.forEach((node) => {
+      const style = window.getComputedStyle(node);
+      if (style.position !== 'fixed') {
+        return;
+      }
+
+      const rect = node.getBoundingClientRect();
+      const nearBottomRight = rect.right >= window.innerWidth - 120 && rect.bottom >= window.innerHeight - 120;
+      if (!nearBottomRight) {
+        return;
+      }
+
+      const isSmallLauncher = rect.width <= 140 && rect.height <= 140;
+      const mentionsChat = [
+        node.id,
+        node.className,
+        node.getAttribute('aria-label') ?? '',
+        node.getAttribute('title') ?? '',
+      ].join(' ').toLowerCase();
+
+      if (isSmallLauncher || /botpress|chat|widget|assistant|support/.test(mentionsChat)) {
+        node.remove();
+      }
+    });
   }
 }

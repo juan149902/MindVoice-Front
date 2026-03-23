@@ -689,6 +689,37 @@ import { CommonModule } from '@angular/common';
       transform: translateY(-2px);
     }
 
+    /* ─── MEDIA QUERIES FOR RESPONSIVENESS ──────────────────────── */
+    @media (max-width: 767px) {
+      .section-inner { padding: 0 1rem; }
+      .snap-section { padding-top: 4.5rem; padding-bottom: 2.5rem; }
+      .hero-grid { gap: 2rem; }
+      .hero-title { font-size: clamp(1.8rem, 7vw, 2.5rem); }
+      .hero-desc { font-size: 0.95rem; }
+      .hero-actions { flex-direction: column; gap: 0.75rem; align-items: stretch; }
+      .hero-actions > a { text-align: center; }
+      .pricing-grid { grid-template-columns: 1fr; gap: 1rem; }
+      .stats-banner { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; padding: 1.5rem; }
+      .stats-banner > div { padding: 0.75rem 0.5rem; }
+      .stats-banner p:first-child { font-size: 2rem; }
+      .cta-final { padding: 2rem 1.5rem; }
+      .cta-final h2 { font-size: 2rem; }
+      .cta-final p { font-size: 1rem; }
+      .footer-soft .flex { flex-direction: column; text-align: center; gap: 0.5rem; }
+    }
+
+    @media (max-width: 1023px) and (min-width: 768px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .pricing-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .header-inner { padding: 0.75rem 1rem; }
+      .hero-card-wrap { margin-top: 1rem; }
+      .float-badge { display: none; } /* Ocultar insignias en pantallas muy pequeñas */
+      .features-grid { grid-template-columns: 1fr; }
+    }
+
     /* ─── REVEAL ────────────────────────────────────────────────── */
     .reveal { opacity:0; transform:translateY(30px); transition:opacity 0.7s ease, transform 0.7s ease; }
     .reveal.visible { opacity:1; transform:translateY(0); }

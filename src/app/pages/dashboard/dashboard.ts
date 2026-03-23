@@ -162,15 +162,6 @@ interface DashboardUser extends ApiEntity {
       </section>
     </div>
     
-    <div class="fixed bottom-10 right-10 flex flex-col items-end gap-4 z-50">
-      <div class="bg-surface-dark border border-white/10 px-4 py-2 rounded-lg shadow-2xl text-sm font-bold text-primary flex items-center gap-2">
-        <span class="w-2 h-2 bg-primary rounded-full animate-pulse"></span>
-        Listo para grabar
-      </div>
-      <button class="group flex items-center justify-center w-16 h-16 bg-primary text-white rounded-full shadow-2xl shadow-primary/40 hover:scale-110 transition-transform duration-300">
-        <mat-icon class="text-3xl group-hover:rotate-12 transition-transform">mic</mat-icon>
-      </button>
-    </div>
   `
 })
 export class DashboardComponent implements OnInit {

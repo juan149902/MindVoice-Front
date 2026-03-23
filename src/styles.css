@@ -79,3 +79,14 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+body.auth-hide-chatbot .bpChatContainer,
+body.auth-hide-chatbot #fab-root,
+body.auth-hide-chatbot #message-preview-root,
+body.auth-hide-chatbot #webchat-root,
+body.auth-hide-chatbot bp-web-widget,
+body.auth-hide-chatbot bp-widget {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
