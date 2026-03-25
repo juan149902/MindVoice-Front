@@ -33,7 +33,8 @@ body {
 }
 
 .theme-light .text-gray-400,
-.theme-light .text-gray-300 {
+.theme-light .text-gray-300,
+.theme-light .text-gray-200 {
   color: #475569 !important;
 }
 
@@ -70,6 +71,59 @@ body {
 .theme-light .hover\:bg-primary-hover:hover {
   background-color: rgba(124, 58, 237, 0.32) !important;
   color: #3b0764 !important;
+}
+
+.theme-light select,
+.theme-light select.bg-background-dark,
+.theme-light select.border-border-dark {
+  background-color: #ffffff !important;
+  border-color: #d7e0ea !important;
+  color: #1e293b !important;
+}
+
+.theme-light select:focus {
+  border-color: #7c3aed !important;
+  outline: none;
+}
+
+.theme-light select option {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+}
+
+.theme-light select option:checked {
+  background: linear-gradient(#7c3aed, #7c3aed);
+  background-color: #7c3aed !important;
+  color: #ffffff !important;
+}
+
+.theme-light .bg-surface-dark {
+  background-color: #f0f3f8 !important;
+}
+
+.theme-light .border-border-dark {
+  border-color: #d7e0ea !important;
+}
+
+.theme-light .hover\:bg-white\/5:hover {
+  background-color: rgba(124, 58, 237, 0.08) !important;
+}
+
+.theme-light button.hover\:bg-white\/5:hover {
+  background-color: rgba(124, 58, 237, 0.08) !important;
+}
+
+/* Estilo para botones con bg-surface-dark en modo claro */
+.theme-light button.bg-surface-dark {
+  color: #1e293b !important;
+}
+
+.theme-light button.bg-surface-dark mat-icon {
+  color: #1e293b !important;
+}
+
+.theme-light mat-icon {
+  color: #334155 !important;
 }
 
 .material-symbols-outlined {
