@@ -1,9 +1,9 @@
-import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectorRef, Component, OnDestroy, OnInit, PLATFORM_ID, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { Component, inject, OnInit } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { Router } from '@angular/router';
-import { Subject, takeUntil } from 'rxjs';
+import { BehaviorSubject, Observable, combineLatest } from 'rxjs';
+import { map, startWith } from 'rxjs/operators';
 import {
   AiAnalysisEntity,
   AudioEntity,
@@ -12,6 +12,7 @@ import {
 } from '../../core/services/audio-workflow.service';
 import { WorkflowEventsService } from '../../core/services/workflow-events.service';
 import { StateManagementService } from '../../core/services/state-management.service';
+import { AudioDownloaderService } from '../../core/services/audio-downloader.service';
 
 interface RecordingRow {
   audio: AudioEntity;
@@ -34,42 +35,39 @@ interface RecordingRow {
         <button
           type="button"
           class="h-10 px-4 rounded-lg border border-border-dark text-sm font-semibold text-gray-300 hover:bg-border-dark/70 transition-colors"
-          (click)="loadData()"
-          [disabled]="loading"
+          (click)="refreshData()"
+          [disabled]="(loading$ | async)"
         >
           <span class="inline-flex items-center gap-2">
-            <mat-icon class="text-lg" [class.animate-spin]="loading">refresh</mat-icon>
+            <mat-icon class="text-lg" [class.animate-spin]="(loading$ | async)">refresh</mat-icon>
             Recargar
           </span>
         </button>
       </section>
 
-      @if (errorMessage) {
+      @if (error$ | async) {
         <section class="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-300">
-          {{ errorMessage }}
-        </section>
-      }
-
-      @if (successMessage) {
-        <section class="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-300">
-          {{ successMessage }}
+          {{ error$ | async }}
         </section>
       }
 
       <section class="rounded-xl border border-white/10 bg-surface-dark p-5 space-y-4">
-        @if (loading && rows.length === 0) {
+        @let loading = (loading$ | async);
+        @let rows = (rows$ | async);
+        
+        @if (loading && (!rows || rows.length === 0)) {
           <p class="text-sm text-gray-400">Cargando grabaciones...</p>
         }
 
-        @if (loading && rows.length > 0) {
+        @if (loading && rows && rows.length > 0) {
           <p class="text-xs text-gray-500">Actualizando datos...</p>
         }
 
-        @if (!loading && rows.length === 0) {
+        @if (!loading && (!rows || rows.length === 0)) {
           <p class="text-sm text-gray-400">No hay grabaciones disponibles.</p>
         }
 
-        @if (rows.length > 0) {
+        @if (rows && rows.length > 0) {
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
             @for (row of rows; track row.audio._id || $index) {
               <article class="rounded-xl border border-border-dark bg-background-dark/45 p-4 space-y-3">
@@ -136,277 +134,124 @@ interface RecordingRow {
     </div>
   `,
 })
-export class RecordingsComponent implements OnInit, OnDestroy {
+export class RecordingsComponent implements OnInit {
+  private readonly state = inject(StateManagementService);
   private readonly audioWorkflow = inject(AudioWorkflowService);
+  private readonly audioDownloader = inject(AudioDownloaderService);
   private readonly workflowEvents = inject(WorkflowEventsService);
   private readonly router = inject(Router);
-  private readonly platformId = inject(PLATFORM_ID);
-  private readonly cdr = inject(ChangeDetectorRef);
-  private readonly state = inject(StateManagementService);
-  private readonly destroy$ = new Subject<void>();
-  private loadRequestId = 0;
 
-  loading = false;
-  private loadingAudios = false;
-  private loadingTranscriptions = false;
-  private loadingAnalyses = false;
-  errorMessage = '';
-  successMessage = '';
+  private analyzingAudioIds$ = new BehaviorSubject<Set<string>>(new Set());
 
-  rows: RecordingRow[] = [];
-  private analyzingAudioIds = new Set<string>();
+  loading$ = this.state.loading$;
+  error$ = this.state.error$;
+  rows$!: Observable<RecordingRow[]>;
 
   ngOnInit(): void {
-    if (!isPlatformBrowser(this.platformId)) {
-      return;
-    }
+    const combined$ = combineLatest([
+      this.state.audios$,
+      this.state.transcriptions$,
+      this.state.analyses$,
+      this.analyzingAudioIds$,
+    ]);
 
-    this.loadData();
+    this.rows$ = combined$.pipe(
+      map(([audios, transcriptions, analyses, analyzingIds]: any) => {
+        return (audios || []).map((audio: AudioEntity) => ({
+          audio,
+          transcriptions: (transcriptions || []).filter((t: TranscriptionEntity) => t.audioId === audio._id),
+          analyses: (analyses || []).filter((a: AiAnalysisEntity) => {
+            const trans = (transcriptions || []).find((t: TranscriptionEntity) => t._id === a.transcriptionId);
+            return trans?.audioId === audio._id;
+          }),
+          isAnalyzing: analyzingIds.has(audio._id || ''),
+        }));
+      }),
+      startWith([])
+    );
+
+    this.state.refreshAllData();
     this.workflowEvents.changed$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(() => this.loadData(false));
+      .subscribe(() => this.state.refreshAllData());
   }
 
-  ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
+  refreshData(): void {
+    this.state.refreshAllData();
   }
 
-  loadData(resetMessages = true): void {
-    const requestId = ++this.loadRequestId;
-
-    if (resetMessages) {
-      this.errorMessage = '';
-      this.successMessage = '';
-    }
-    this.loadingAudios = true;
-    this.loadingTranscriptions = true;
-    this.loadingAnalyses = true;
-    this.refreshLoadingState();
-
-    let audios: AudioEntity[] = [];
-    let transcriptions: TranscriptionEntity[] = [];
-    let analyses: AiAnalysisEntity[] = [];
-
-    const updateRows = () => {
-      this.rows = this.buildRows(audios, transcriptions, analyses);
-    };
-
-    this.audioWorkflow.listAudios()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (value) => {
-          if (requestId !== this.loadRequestId) {
-            return;
-          }
-          audios = value;
-          updateRows();
-          this.loadingAudios = false;
-          this.refreshLoadingState();
-        },
-        error: (error: HttpErrorResponse) => {
-          if (requestId !== this.loadRequestId) {
-            return;
-          }
-          this.loadingAudios = false;
-          this.refreshLoadingState();
-          this.errorMessage = this.extractErrorMessage(error);
-        },
-      });
-
-    this.audioWorkflow.listTranscriptions()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (value) => {
-          if (requestId !== this.loadRequestId) {
-            return;
-          }
-          transcriptions = value;
-          updateRows();
-          this.loadingTranscriptions = false;
-          this.refreshLoadingState();
-        },
-        error: (error: HttpErrorResponse) => {
-          if (requestId !== this.loadRequestId) {
-            return;
-          }
-          this.loadingTranscriptions = false;
-          this.refreshLoadingState();
-          this.errorMessage = this.extractErrorMessage(error);
-        },
-      });
-
-    this.audioWorkflow.listAnalyses()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (value) => {
-          if (requestId !== this.loadRequestId) {
-            return;
-          }
-          analyses = value;
-          updateRows();
-          this.loadingAnalyses = false;
-          this.refreshLoadingState();
-        },
-        error: (error: HttpErrorResponse) => {
-          if (requestId !== this.loadRequestId) {
-            return;
-          }
-          this.loadingAnalyses = false;
-          this.refreshLoadingState();
-          this.errorMessage = this.extractErrorMessage(error);
-        },
-      });
-  }
-
-  analyzeAudio(audio: AudioEntity): void {
-    if (!audio._id) return;
+  async analyzeAudio(audio: AudioEntity): Promise<void> {
+    if (!audio._id || !audio.filePath) return;
 
     const audioId = audio._id;
-    this.analyzingAudioIds.add(audioId);
-    this.updateRowAnalyzingState(audioId, true);
+    const current = this.analyzingAudioIds$.value;
+    current.add(audioId);
+    this.analyzingAudioIds$.next(new Set(current));
 
-    const row = this.rows.find(r => r.audio._id === audioId);
-    if (!row) return;
+    try {
+      const audioBlob = await this.audioDownloader.downloadAudioBlobPromise(audio.filePath);
+      const fileName = audio.filePath.split('/').pop() || 'audio.wav';
 
-    this.audioWorkflow.analyzeAudio(new Blob(), audio.filePath)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
+      this.audioWorkflow.analyzeAudio(audioBlob, fileName).subscribe({
         next: (aiResult) => {
           const transcriptionText = this.audioWorkflow.extractTranscriptionText(aiResult);
-          
+
           this.state.createTranscription({
             audioId,
             text: transcriptionText,
             timestamps: [],
-          })
-            .pipe(takeUntil(this.destroy$))
-            .subscribe({
-              next: (transcription) => {
-                this.state.createAnalysis({
-                  transcriptionId: transcription._id || '',
-                  result: {
-                    resumen: aiResult.executive_summary?.join('\n\n') || 'Análisis generado',
-                    temas: aiResult.tags || [],
-                    acciones: (aiResult.task_list || []).map((t: any) => ({
-                      accion: t.task || '',
-                      prioridad: t.priority || 'media',
-                    })),
-                    sentimiento: aiResult.sentiment,
-                  },
-                })
-                  .pipe(takeUntil(this.destroy$))
-                  .subscribe({
-                    next: () => {
-                      this.successMessage = `Audio "${audio.filePath}" analizado exitosamente`;
-                      this.analyzingAudioIds.delete(audioId);
-                      this.updateRowAnalyzingState(audioId, false);
-                      this.loadData(false);
-                    },
-                    error: (err: any) => {
-                      this.errorMessage = 'Error al crear análisis: ' + this.extractErrorMessage(err);
-                      this.analyzingAudioIds.delete(audioId);
-                      this.updateRowAnalyzingState(audioId, false);
-                    },
-                  });
-              },
-              error: (err: any) => {
-                this.errorMessage = 'Error al crear transcripción: ' + this.extractErrorMessage(err);
-                this.analyzingAudioIds.delete(audioId);
-                this.updateRowAnalyzingState(audioId, false);
-              },
-            });
+          }).subscribe({
+            next: (transcription) => {
+              this.state.createAnalysis({
+                transcriptionId: transcription._id || '',
+                result: {
+                  resumen: aiResult.executive_summary?.join('\n\n') || 'Análisis generado',
+                  temas: aiResult.tags || [],
+                  acciones: (aiResult.task_list || []).map(t => ({
+                    accion: t.task || '',
+                    prioridad: t.priority || 'media',
+                  })),
+                  sentimiento: aiResult.sentiment,
+                },
+              }).subscribe({
+                next: () => {
+                  const updated = this.analyzingAudioIds$.value;
+                  updated.delete(audioId);
+                  this.analyzingAudioIds$.next(new Set(updated));
+                },
+                error: () => {
+                  const updated = this.analyzingAudioIds$.value;
+                  updated.delete(audioId);
+                  this.analyzingAudioIds$.next(new Set(updated));
+                }
+              });
+            }
+          });
         },
-        error: (err: any) => {
-          this.errorMessage = 'Error al analizar audio: ' + this.extractErrorMessage(err);
-          this.analyzingAudioIds.delete(audioId);
-          this.updateRowAnalyzingState(audioId, false);
-        },
+        error: (err) => {
+          console.error('Error analyzing audio:', err);
+          const updated = this.analyzingAudioIds$.value;
+          updated.delete(audioId);
+          this.analyzingAudioIds$.next(new Set(updated));
+        }
       });
-  }
-
-  private updateRowAnalyzingState(audioId: string, isAnalyzing: boolean): void {
-    const row = this.rows.find(r => r.audio._id === audioId);
-    if (row) {
-      row.isAnalyzing = isAnalyzing;
-      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error downloading audio:', error);
+      const updated = this.analyzingAudioIds$.value;
+      updated.delete(audioId);
+      this.analyzingAudioIds$.next(new Set(updated));
     }
   }
 
   goToSummaries(audio: AudioEntity): void {
-    const audioId = audio._id ?? '';
-    void this.router.navigate(['/summaries'], { queryParams: { audioId } });
+    this.router.navigate(['/summaries'], { queryParams: { audioId: audio._id } });
   }
 
   goToAiAnalysis(audio: AudioEntity): void {
-    const audioId = audio._id ?? '';
-    void this.router.navigate(['/ai-analysis'], { queryParams: { audioId } });
+    this.router.navigate(['/ai-analysis'], { queryParams: { audioId: audio._id } });
   }
 
   isPlayableUrl(filePath: string): boolean {
-    const normalized = filePath.trim().toLocaleLowerCase();
-    return normalized.startsWith('http://') || normalized.startsWith('https://') || normalized.startsWith('/');
-  }
-
-  private buildRows(
-    audios: AudioEntity[],
-    transcriptions: TranscriptionEntity[],
-    analyses: AiAnalysisEntity[],
-  ): RecordingRow[] {
-    const transcriptionsByAudio = new Map<string, TranscriptionEntity[]>();
-    transcriptions.forEach((transcription) => {
-      const current = transcriptionsByAudio.get(transcription.audioId) ?? [];
-      transcriptionsByAudio.set(transcription.audioId, [...current, transcription]);
-    });
-
-    const analysesByTranscription = new Map<string, AiAnalysisEntity[]>();
-    analyses.forEach((analysis) => {
-      const current = analysesByTranscription.get(analysis.transcriptionId) ?? [];
-      analysesByTranscription.set(analysis.transcriptionId, [...current, analysis]);
-    });
-
-    return audios.map((audio) => {
-      const audioId = audio._id ?? '';
-      const audioTranscriptions = audioId ? (transcriptionsByAudio.get(audioId) ?? []) : [];
-      const audioAnalyses: AiAnalysisEntity[] = [];
-
-      audioTranscriptions.forEach((transcription) => {
-        const transcriptionId = transcription._id ?? '';
-        if (!transcriptionId) {
-          return;
-        }
-        const byTranscription = analysesByTranscription.get(transcriptionId) ?? [];
-        audioAnalyses.push(...byTranscription);
-      });
-
-      return {
-        audio,
-        transcriptions: audioTranscriptions,
-        analyses: audioAnalyses,
-        isAnalyzing: this.analyzingAudioIds.has(audioId),
-      };
-    });
-  }
-
-  private extractErrorMessage(error: HttpErrorResponse | any): string {
-    const message = error?.error?.message;
-    if (typeof message === 'string' && message.trim().length > 0) {
-      return message;
-    }
-
-    if (error.status === 401) {
-      return 'Sesión expirada. Inicia sesión nuevamente.';
-    }
-
-    if (error.status === 0) {
-      return 'No se pudo conectar con la API.';
-    }
-
-    return 'No se pudieron cargar las grabaciones.';
-  }
-
-  private refreshLoadingState(): void {
-    this.loading = this.loadingAudios || this.loadingTranscriptions || this.loadingAnalyses;
-    this.cdr.detectChanges();
+    if (!filePath) return false;
+    return filePath.startsWith('http') || filePath.startsWith('blob:') || filePath.startsWith('/');
   }
 }

@@ -624,6 +624,8 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       });
 
     this.loadFoldersDocumentsAndTags();
+    
+    // Force immediate data load without delay
     this.state.refreshAllData();
   }
 
