@@ -10,10 +10,16 @@ export class AudioDownloaderService {
 
   downloadAudioBlob(filePath: string): Observable<Blob> {
     // Si filePath es una URL completa, usarla directamente
-    const url = filePath.startsWith('http') ? filePath : `${this.apiBaseUrl}${filePath}`;
-    return this.http.get(url, {
-      responseType: 'blob',
-    });
+    if (filePath.startsWith('http')) {
+      return this.http.get(filePath, { responseType: 'blob' });
+    }
+
+    // Asegurarse de que hay un slash entre base URL y el path
+    const baseUrl = this.apiBaseUrl.replace(/\/$/, '');
+    const path = filePath.startsWith('/') ? filePath : `/${filePath}`;
+    const url = `${baseUrl}${path}`;
+
+    return this.http.get(url, { responseType: 'blob' });
   }
 
   async downloadAudioBlobPromise(filePath: string): Promise<Blob> {

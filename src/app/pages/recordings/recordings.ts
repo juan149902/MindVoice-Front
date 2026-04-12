@@ -148,6 +148,9 @@ export class RecordingsComponent implements OnInit {
   rows$!: Observable<RecordingRow[]>;
 
   ngOnInit(): void {
+    // ✅ IMPORTANTE: Cargar datos ANTES de configurar observables
+    this.state.refreshAllData();
+
     const combined$ = combineLatest([
       this.state.audios$,
       this.state.transcriptions$,
@@ -170,7 +173,7 @@ export class RecordingsComponent implements OnInit {
       startWith([])
     );
 
-    this.state.refreshAllData();
+    // Recargar cuando haya cambios
     this.workflowEvents.changed$
       .subscribe(() => this.state.refreshAllData());
   }
