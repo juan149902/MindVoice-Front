@@ -13,7 +13,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
-import { firstValueFrom, Subject, takeUntil, switchMap, of } from 'rxjs';
+import { firstValueFrom, Subject, takeUntil } from 'rxjs';
 import {
   MindmapCanvasLinkPayload,
   MindmapCanvasNodePayload,
@@ -24,6 +24,7 @@ import {
 import { MindmapSocketService, SocketConnectionStatus } from '../../core/services/mindmap-socket.service';
 import { SocketMindmapUpdatedEvent } from '../../core/models/socket.models';
 import { TokenStorageService } from '../../core/services/token-storage.service';
+import { StateManagementService } from '../../core/services/state-management.service';
 
 interface MindMapNode {
   id: string;
@@ -87,11 +88,11 @@ interface Point {
           <button
             type="button"
             class="h-10 px-4 rounded-lg border border-border-dark text-sm font-semibold text-gray-200 hover:bg-border-dark/70 transition-colors disabled:opacity-50"
-            (click)="reloadWorkspace()"
-            [disabled]="workspaceLoading || creatingMap || saving"
+            (click)="refreshData()"
+            [disabled]="(loading$ | async) || creatingMap || saving"
           >
             <span class="inline-flex items-center gap-2">
-              <mat-icon class="text-lg" [class.animate-spin]="workspaceLoading">refresh</mat-icon>
+              <mat-icon class="text-lg" [class.animate-spin]="(loading$ | async)">refresh</mat-icon>
               Recargar
             </span>
           </button>
@@ -153,14 +154,14 @@ interface Point {
               id="new-map-title"
               type="text"
               [(ngModel)]="newMapTitle"
-              [disabled]="creatingMap || workspaceLoading || !isAuthenticated"
+              [disabled]="creatingMap || (loading$ | async) || !isAuthenticated"
               class="w-full h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-100"
               placeholder="Ej. Planeación semanal"
             />
             <button
               type="button"
               class="w-full h-10 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary-hover transition-colors disabled:opacity-60"
-              [disabled]="creatingMap || workspaceLoading || !isAuthenticated"
+              [disabled]="creatingMap || (loading$ | async) || !isAuthenticated"
               (click)="createMap()"
             >
               <span class="inline-flex items-center gap-2">
@@ -171,16 +172,16 @@ interface Point {
           </div>
 
           <div class="space-y-2 max-h-[550px] overflow-auto pr-1">
-            @if (workspaceLoading) {
+            @if ((loading$ | async)) {
               <p class="text-sm text-gray-400">Cargando mapas...</p>
             }
-            @if (!workspaceLoading && workspaceMaps.length === 0) {
+            @if (!((loading$ | async)) && (mindmaps$ | async)?.length === 0) {
               <p class="text-sm text-gray-400">
                 No hay mapas aún. Crea el primero.
               </p>
             }
 
-            @for (item of workspaceMaps; track item.mindmap._id || item.mindmap.documentId) {
+            @for (item of (mindmaps$ | async) ?? []; track item.mindmap._id || item.mindmap.documentId) {
               <button
                 type="button"
                 (click)="openMap(item)"
@@ -517,6 +518,7 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly state = inject(StateManagementService);
   private readonly destroy$ = new Subject<void>();
 
   @ViewChild('canvasRef') private canvasRef?: ElementRef<HTMLDivElement>;
@@ -525,7 +527,10 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   readonly canvasWidth = 980;
   readonly canvasHeight = 520;
 
-  workspaceLoading = false;
+  readonly loading$ = this.state.loading$;
+  readonly error$ = this.state.error$;
+  readonly mindmaps$ = this.state.mindmaps$;
+
   creatingMap = false;
   saving = false;
   hasUnsavedChanges = false;
@@ -544,7 +549,6 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   newMapTitle = 'Mapa colaborativo';
   shareUrl = '';
 
-  workspaceMaps: MindmapWorkspaceItem[] = [];
   currentMap: MindmapWorkspaceItem | null = null;
 
   participants: string[] = [];
@@ -620,7 +624,7 @@ export class MindMapsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    void this.loadWorkspace();
+    this.refreshData();
   }
 
   ngOnDestroy(): void {
@@ -675,7 +679,7 @@ export class MindMapsComponent implements OnInit, OnDestroy {
       }
       return;
     }
-    void this.loadWorkspace();
+    this.refreshData();
   }
 
   async createMap(): Promise<void> {
@@ -693,11 +697,11 @@ export class MindMapsComponent implements OnInit, OnDestroy {
       const created = await firstValueFrom(
         this.workflow.createMindmap(title, this.buildInitialCanvas()),
       );
-      this.workspaceMaps = [created, ...this.workspaceMaps];
       this.newMapTitle = '';
       this.openMap(created);
       this.successMessage = 'Mapa creado y listo para compartir.';
       this.showToast('Mapa creado y listo para compartir.', 'success');
+      this.state.refreshAllData();
     } catch (error) {
       this.errorMessage = this.toErrorMessage(error, 'No se pudo crear el mapa.');
     } finally {
@@ -1004,68 +1008,55 @@ export class MindMapsComponent implements OnInit, OnDestroy {
     return { x: mid.x + link.curveOffsetX, y: mid.y + link.curveOffsetY };
   }
 
-  private async loadWorkspace(): Promise<void> {
-    this.workspaceLoading = true;
+  refreshData(): void {
     this.errorMessage = '';
     this.successMessage = '';
     this.guestSessionMode = false;
 
-    try {
-      const requestedSession = this.route.snapshot.queryParamMap.get('session');
-      
-      // Use progressive loading - subscribe to updates as they arrive
-      this.workflow.listWorkspaceItemsProgressive()
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: (progressiveItems) => {
-            this.workspaceMaps = progressiveItems;
-            this.workspaceLoading = false;
-            
-            // Auto-open first map or requested shared map
-            if (progressiveItems.length === 0) {
-              return;
-            }
+    this.mindmaps$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (mindmaps) => {
+          if (mindmaps.length === 0) {
+            return;
+          }
 
-            if (requestedSession) {
-              const fromList = progressiveItems.find((item) => item.mindmap._id === requestedSession);
-              if (fromList) {
-                this.openMap(fromList);
-              } else {
-                // Try to load shared map by ID
-                this.workflow.getWorkspaceItemByMindmapId(requestedSession)
-                  .pipe(takeUntil(this.destroy$))
-                  .subscribe({
-                    next: (shared) => {
-                      this.workspaceMaps = [shared, ...this.workspaceMaps.filter((item) => item.mindmap._id !== shared.mindmap._id)];
-                      this.openMap(shared);
-                      this.infoMessage = 'Se abrió un mapa compartido por link.';
-                    },
-                    error: (error) => {
-                      this.errorMessage = this.toErrorMessage(error, 'No se pudo abrir el mapa compartido.');
-                      if (this.workspaceMaps.length > 0) {
-                        this.openMap(this.workspaceMaps[0]);
-                      }
-                    },
-                  });
-              }
+          const requestedSession = this.route.snapshot.queryParamMap.get('session');
+          if (requestedSession) {
+            const fromList = mindmaps.find((item) => item.mindmap._id === requestedSession);
+            if (fromList) {
+              this.openMap(fromList);
             } else {
-              // Auto-open first map
-              if (!this.currentMap) {
-                this.openMap(progressiveItems[0]);
-              }
+              this.workflow.getWorkspaceItemByMindmapId(requestedSession)
+                .pipe(takeUntil(this.destroy$))
+                .subscribe({
+                  next: (shared) => {
+                    this.openMap(shared);
+                    this.infoMessage = 'Se abrió un mapa compartido por link.';
+                  },
+                  error: (error) => {
+                    this.errorMessage = this.toErrorMessage(error, 'No se pudo abrir el mapa compartido.');
+                    if (mindmaps.length > 0) {
+                      this.openMap(mindmaps[0]);
+                    }
+                  },
+                });
             }
-          },
-          error: (error) => {
-            this.workspaceLoading = false;
-            this.errorMessage = this.toErrorMessage(error, 'No se pudo cargar los mapas mentales.');
-          },
-        });
-    } catch (error) {
-      this.workspaceLoading = false;
-      this.errorMessage = this.toErrorMessage(error, 'No se pudo cargar los mapas mentales.');
-    } finally {
-      this.workspaceLoading = false;
-    }
+          } else {
+            if (!this.currentMap) {
+              this.openMap(mindmaps[0]);
+            }
+          }
+        },
+        error: (error) => {
+          this.errorMessage = this.toErrorMessage(error, 'No se pudo cargar los mapas mentales.');
+        },
+      });
+  }
+
+  private async loadWorkspace(): Promise<void> {
+    this.state.refreshAllData();
+    this.refreshData();
   }
 
   private enterGuestSession(sessionId: string): void {
@@ -1077,7 +1068,6 @@ export class MindMapsComponent implements OnInit, OnDestroy {
     this.errorMessage = '';
     this.successMessage = '';
     this.guestSessionMode = true;
-    this.workspaceLoading = false;
 
     const initialCanvas = this.buildInitialCanvas();
     const guestMap: MindmapWorkspaceItem = {
@@ -1090,7 +1080,6 @@ export class MindMapsComponent implements OnInit, OnDestroy {
       title: `Sesión compartida ${this.shortId(normalizedSession)}`,
     };
 
-    this.workspaceMaps = [guestMap];
     this.currentMap = guestMap;
     this.applyCanvasPayload(initialCanvas, { center: true, resolveCollisions: true });
     this.selectedNodeId = null;
@@ -1108,12 +1097,14 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   private async openSharedMapById(mindmapId: string): Promise<void> {
     try {
       const shared = await firstValueFrom(this.workflow.getWorkspaceItemByMindmapId(mindmapId));
-      this.workspaceMaps = [shared, ...this.workspaceMaps.filter((item) => item.mindmap._id !== shared.mindmap._id)];
       this.openMap(shared);
       this.infoMessage = 'Se abrió un mapa compartido por link.';
     } catch (error) {
       this.errorMessage = this.toErrorMessage(error, 'No se pudo abrir el mapa compartido.');
-      this.openMap(this.workspaceMaps[0]);
+      const firstMindmap = (await firstValueFrom(this.mindmaps$))?.[0];
+      if (firstMindmap) {
+        this.openMap(firstMindmap);
+      }
     }
   }
 
@@ -1260,12 +1251,6 @@ export class MindMapsComponent implements OnInit, OnDestroy {
         this.workflow.saveMindmapState(mindmapId, documentId, this.exportCanvasPayload()),
       );
 
-      this.workspaceMaps = this.workspaceMaps.map((item) =>
-        item.mindmap._id === saved._id
-          ? { ...item, mindmap: saved }
-          : item,
-      );
-
       const activeMap = this.currentMap;
       if (activeMap && activeMap.mindmap._id === saved._id) {
         this.currentMap = {
@@ -1282,6 +1267,7 @@ export class MindMapsComponent implements OnInit, OnDestroy {
       }
       this.infoMessage = '';
       this.addActivity('Estado guardado en base de datos.');
+      this.state.refreshAllData();
     } catch (error) {
       if (this.isAuthError(error)) {
         this.isAuthenticated = false;
