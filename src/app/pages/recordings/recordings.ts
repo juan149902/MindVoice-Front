@@ -12,7 +12,6 @@ import {
 } from '../../core/services/audio-workflow.service';
 import { WorkflowEventsService } from '../../core/services/workflow-events.service';
 import { StateManagementService } from '../../core/services/state-management.service';
-import { AudioDownloaderService } from '../../core/services/audio-downloader.service';
 
 interface RecordingRow {
   audio: AudioEntity;
@@ -137,7 +136,6 @@ interface RecordingRow {
 export class RecordingsComponent implements OnInit {
   private readonly state = inject(StateManagementService);
   private readonly audioWorkflow = inject(AudioWorkflowService);
-  private readonly audioDownloader = inject(AudioDownloaderService);
   private readonly workflowEvents = inject(WorkflowEventsService);
   private readonly router = inject(Router);
 
@@ -190,59 +188,50 @@ export class RecordingsComponent implements OnInit {
     current.add(audioId);
     this.analyzingAudioIds$.next(new Set(current));
 
-    try {
-      const audioBlob = await this.audioDownloader.downloadAudioBlobPromise(audio.filePath);
-      const fileName = audio.filePath.split('/').pop() || 'audio.wav';
+    // Enviar la ruta del archivo al backend en lugar de descargar
+    this.audioWorkflow.analyzeAudioByFilePath(audio.filePath).subscribe({
+      next: (aiResult) => {
+        const transcriptionText = this.audioWorkflow.extractTranscriptionText(aiResult);
 
-      this.audioWorkflow.analyzeAudio(audioBlob, fileName).subscribe({
-        next: (aiResult) => {
-          const transcriptionText = this.audioWorkflow.extractTranscriptionText(aiResult);
-
-          this.state.createTranscription({
-            audioId,
-            text: transcriptionText,
-            timestamps: [],
-          }).subscribe({
-            next: (transcription) => {
-              this.state.createAnalysis({
-                transcriptionId: transcription._id || '',
-                result: {
-                  resumen: aiResult.executive_summary?.join('\n\n') || 'Análisis generado',
-                  temas: aiResult.tags || [],
-                  acciones: (aiResult.task_list || []).map(t => ({
-                    accion: t.task || '',
-                    prioridad: t.priority || 'media',
-                  })),
-                  sentimiento: aiResult.sentiment,
-                },
-              }).subscribe({
-                next: () => {
-                  const updated = this.analyzingAudioIds$.value;
-                  updated.delete(audioId);
-                  this.analyzingAudioIds$.next(new Set(updated));
-                },
-                error: () => {
-                  const updated = this.analyzingAudioIds$.value;
-                  updated.delete(audioId);
-                  this.analyzingAudioIds$.next(new Set(updated));
-                }
-              });
-            }
-          });
-        },
-        error: (err) => {
-          console.error('Error analyzing audio:', err);
-          const updated = this.analyzingAudioIds$.value;
-          updated.delete(audioId);
-          this.analyzingAudioIds$.next(new Set(updated));
-        }
-      });
-    } catch (error) {
-      console.error('Error downloading audio:', error);
-      const updated = this.analyzingAudioIds$.value;
-      updated.delete(audioId);
-      this.analyzingAudioIds$.next(new Set(updated));
-    }
+        this.state.createTranscription({
+          audioId,
+          text: transcriptionText,
+          timestamps: [],
+        }).subscribe({
+          next: (transcription) => {
+            this.state.createAnalysis({
+              transcriptionId: transcription._id || '',
+              result: {
+                resumen: aiResult.executive_summary?.join('\n\n') || 'Análisis generado',
+                temas: aiResult.tags || [],
+                acciones: (aiResult.task_list || []).map(t => ({
+                  accion: t.task || '',
+                  prioridad: t.priority || 'media',
+                })),
+                sentimiento: aiResult.sentiment,
+              },
+            }).subscribe({
+              next: () => {
+                const updated = this.analyzingAudioIds$.value;
+                updated.delete(audioId);
+                this.analyzingAudioIds$.next(new Set(updated));
+              },
+              error: () => {
+                const updated = this.analyzingAudioIds$.value;
+                updated.delete(audioId);
+                this.analyzingAudioIds$.next(new Set(updated));
+              }
+            });
+          }
+        });
+      },
+      error: (err) => {
+        console.error('Error analyzing audio:', err);
+        const updated = this.analyzingAudioIds$.value;
+        updated.delete(audioId);
+        this.analyzingAudioIds$.next(new Set(updated));
+      }
+    });
   }
 
   goToSummaries(audio: AudioEntity): void {

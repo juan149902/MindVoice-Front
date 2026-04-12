@@ -181,6 +181,21 @@ export class AudioWorkflowService {
     return this.api.post<MindvoiceAnalyzeResponse>('mindvoice-api/analyze/audio', formData);
   }
 
+  /**
+   * Analiza un audio enviando solo la ruta al backend
+   * El backend se encarga de descargar y procesar el archivo
+   * Evita problemas de CORS
+   */
+  analyzeAudioByFilePath(filePath: string, apiKey?: string): Observable<MindvoiceAnalyzeResponse> {
+    const payload = { file_path: filePath };
+    const resolvedApiKey = this.normalizeApiKey(apiKey) || this.normalizeApiKey(environment.geminiApiKey);
+    if (resolvedApiKey) {
+      (payload as any).api_key = resolvedApiKey;
+    }
+
+    return this.api.post<MindvoiceAnalyzeResponse>('mindvoice-api/analyze/audio-by-path', payload);
+  }
+
   extractTranscriptionText(aiResult: MindvoiceAnalyzeResponse): string {
     const direct = this.normalizeText(aiResult.transcription);
     if (direct) {
