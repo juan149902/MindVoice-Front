@@ -278,6 +278,35 @@ export class StateManagementService {
     );
   }
 
+  // Tag actions
+  createTag(payload: { name: string }): Observable<Tag> {
+    return this.tagsService.createTag(payload).pipe(
+      tap((newTag) => {
+        const currentState = this.stateSubject.getValue();
+        this.stateSubject.next({
+          ...currentState,
+          tags: [newTag, ...currentState.tags],
+          lastUpdated: new Date(),
+        });
+        this.workflowEvents.notifyChanged();
+      }),
+    );
+  }
+
+  deleteTag(tagId: string): Observable<void> {
+    return this.tagsService.deleteTag(tagId).pipe(
+      tap(() => {
+        const currentState = this.stateSubject.getValue();
+        this.stateSubject.next({
+          ...currentState,
+          tags: currentState.tags.filter((t) => t._id !== tagId),
+          lastUpdated: new Date(),
+        });
+        this.workflowEvents.notifyChanged();
+      }),
+    );
+  }
+
   clearError(): void {
     this.errorSubject.next(null);
   }
