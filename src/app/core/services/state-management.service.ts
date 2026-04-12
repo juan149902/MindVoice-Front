@@ -19,6 +19,7 @@ import { AudioWorkflowService } from './audio-workflow.service';
 import { MindmapWorkflowService, MindmapWorkspaceItem } from './mindmap-workflow.service';
 import { WorkflowEventsService } from './workflow-events.service';
 import { ResourceApiService } from './resource-api.service';
+import { TagsService, Tag } from './tags.service';
 import { ApiEntity } from '../models/api.models';
 
 export interface AppState {
@@ -28,7 +29,7 @@ export interface AppState {
   mindmaps: MindmapWorkspaceItem[];
   folders: (ApiEntity & { _id?: string })[];
   documents: (ApiEntity & { _id?: string })[];
-  tags: (ApiEntity & { _id?: string })[];
+  tags: Tag[];
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
@@ -53,6 +54,7 @@ export class StateManagementService {
   private readonly mindmapWorkflow = inject(MindmapWorkflowService);
   private readonly workflowEvents = inject(WorkflowEventsService);
   private readonly resourceApi = inject(ResourceApiService);
+  private readonly tagsService = inject(TagsService);
   private readonly destroy$ = new Subject<void>();
 
   private readonly stateSubject = new BehaviorSubject<AppState>(initialState);
@@ -105,7 +107,7 @@ export class StateManagementService {
     shareReplay(1),
   );
 
-  readonly tags$: Observable<(ApiEntity & { _id?: string })[]> = this.state$.pipe(
+  readonly tags$: Observable<Tag[]> = this.state$.pipe(
     map((state) => state.tags),
     distinctUntilChanged((prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)),
     shareReplay(1),
@@ -162,7 +164,7 @@ export class StateManagementService {
       this.mindmapWorkflow.listWorkspaceItemsProgressive(),
       this.resourceApi.list('folders'),
       this.resourceApi.list('documents'),
-      this.resourceApi.list('tags'),
+      this.tagsService.loadTags(),
     ])
       .pipe(takeUntil(this.destroy$))
       .subscribe({

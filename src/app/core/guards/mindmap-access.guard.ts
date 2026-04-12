@@ -26,7 +26,8 @@ function hasValidSessionToken(token: string): boolean {
 /**
  * Permite acceso a /mind-maps si:
  * 1) hay sesión JWT válida, o
- * 2) la URL trae ?session=<mindmapId> (modo invitado por link compartido).
+ * 2) la URL trae ?session=<mindmapId> (modo invitado por link compartido), o
+ * 3) la URL trae ?shared=true o ?shareToken=<token> (modo de vista compartida)
  */
 export const mindmapAccessGuard: CanActivateFn = (route, state) => {
   const platformId = inject(PLATFORM_ID);
@@ -37,13 +38,22 @@ export const mindmapAccessGuard: CanActivateFn = (route, state) => {
     return true;
   }
 
+  // Verificar autenticación válida
   const token = tokenStorage.getToken();
   if (token && hasValidSessionToken(token)) {
     return true;
   }
 
+  // Permitir acceso compartido por: ?session=id o ?shared=true o ?shareToken=token
   const sharedSession = route.queryParamMap.get('session');
-  if (typeof sharedSession === 'string' && sharedSession.trim().length > 0) {
+  const isShared = route.queryParamMap.get('shared') === 'true';
+  const shareToken = route.queryParamMap.get('shareToken');
+
+  if (
+    (typeof sharedSession === 'string' && sharedSession.trim().length > 0) ||
+    isShared ||
+    (typeof shareToken === 'string' && shareToken.trim().length > 0)
+  ) {
     return true;
   }
 

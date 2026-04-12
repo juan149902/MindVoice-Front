@@ -15,6 +15,10 @@ export class ApiHttpService {
   }
 
   post<T>(path: string, body: unknown): Observable<T> {
+    // Si es FormData, permitir que el navegador maneje los headers
+    if (body instanceof FormData) {
+      return this.http.post<T>(this.buildUrl(path), body);
+    }
     return this.http.post<T>(this.buildUrl(path), body);
   }
 
