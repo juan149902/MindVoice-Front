@@ -11,11 +11,13 @@ import {
   TranscriptionEntity,
 } from '../../core/services/audio-workflow.service';
 import { WorkflowEventsService } from '../../core/services/workflow-events.service';
+import { StateManagementService } from '../../core/services/state-management.service';
 
 interface RecordingRow {
   audio: AudioEntity;
   transcriptions: TranscriptionEntity[];
   analyses: AiAnalysisEntity[];
+  isAnalyzing?: boolean;
 }
 
 @Component({
@@ -97,20 +99,34 @@ interface RecordingRow {
                 }
 
                 <div class="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    class="h-9 px-3 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition-colors"
-                    (click)="goToSummaries(row.audio)"
-                  >
-                    Usar en resúmenes IA
-                  </button>
-                  <button
-                    type="button"
-                    class="h-9 px-3 rounded-lg border border-primary/40 text-primary text-xs font-semibold hover:bg-primary/10 transition-colors"
-                    (click)="goToAiAnalysis(row.audio)"
-                  >
-                    Ver análisis IA
-                  </button>
+                  @if (!row.transcriptions || row.transcriptions.length === 0) {
+                    <button
+                      type="button"
+                      class="h-9 px-3 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50"
+                      (click)="analyzeAudio(row.audio)"
+                      [disabled]="row.isAnalyzing"
+                    >
+                      <span class="inline-flex items-center gap-1">
+                        <mat-icon class="text-sm" [class.animate-spin]="row.isAnalyzing">psychology</mat-icon>
+                        {{ row.isAnalyzing ? 'Analizando...' : 'Analizar Audio' }}
+                      </span>
+                    </button>
+                  } @else {
+                    <button
+                      type="button"
+                      class="h-9 px-3 rounded-lg bg-primary text-white text-xs font-semibold hover:bg-primary-hover transition-colors"
+                      (click)="goToSummaries(row.audio)"
+                    >
+                      Usar en resúmenes IA
+                    </button>
+                    <button
+                      type="button"
+                      class="h-9 px-3 rounded-lg border border-primary/40 text-primary text-xs font-semibold hover:bg-primary/10 transition-colors"
+                      (click)="goToAiAnalysis(row.audio)"
+                    >
+                      Ver análisis IA
+                    </button>
+                  }
                 </div>
               </article>
             }
@@ -126,6 +142,7 @@ export class RecordingsComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly state = inject(StateManagementService);
   private readonly destroy$ = new Subject<void>();
   private loadRequestId = 0;
 
@@ -137,6 +154,7 @@ export class RecordingsComponent implements OnInit, OnDestroy {
   successMessage = '';
 
   rows: RecordingRow[] = [];
+  private analyzingAudioIds = new Set<string>();
 
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) {
@@ -241,6 +259,80 @@ export class RecordingsComponent implements OnInit, OnDestroy {
       });
   }
 
+  analyzeAudio(audio: AudioEntity): void {
+    if (!audio._id) return;
+
+    const audioId = audio._id;
+    this.analyzingAudioIds.add(audioId);
+    this.updateRowAnalyzingState(audioId, true);
+
+    const row = this.rows.find(r => r.audio._id === audioId);
+    if (!row) return;
+
+    this.audioWorkflow.analyzeAudio(new Blob(), audio.filePath)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (aiResult) => {
+          const transcriptionText = this.audioWorkflow.extractTranscriptionText(aiResult);
+          
+          this.state.createTranscription({
+            audioId,
+            text: transcriptionText,
+            timestamps: [],
+          })
+            .pipe(takeUntil(this.destroy$))
+            .subscribe({
+              next: (transcription) => {
+                this.state.createAnalysis({
+                  transcriptionId: transcription._id || '',
+                  result: {
+                    resumen: aiResult.executive_summary?.join('\n\n') || 'Análisis generado',
+                    temas: aiResult.tags || [],
+                    acciones: (aiResult.task_list || []).map((t: any) => ({
+                      accion: t.task || '',
+                      prioridad: t.priority || 'media',
+                    })),
+                    sentimiento: aiResult.sentiment,
+                  },
+                })
+                  .pipe(takeUntil(this.destroy$))
+                  .subscribe({
+                    next: () => {
+                      this.successMessage = `Audio "${audio.filePath}" analizado exitosamente`;
+                      this.analyzingAudioIds.delete(audioId);
+                      this.updateRowAnalyzingState(audioId, false);
+                      this.loadData(false);
+                    },
+                    error: (err: any) => {
+                      this.errorMessage = 'Error al crear análisis: ' + this.extractErrorMessage(err);
+                      this.analyzingAudioIds.delete(audioId);
+                      this.updateRowAnalyzingState(audioId, false);
+                    },
+                  });
+              },
+              error: (err: any) => {
+                this.errorMessage = 'Error al crear transcripción: ' + this.extractErrorMessage(err);
+                this.analyzingAudioIds.delete(audioId);
+                this.updateRowAnalyzingState(audioId, false);
+              },
+            });
+        },
+        error: (err: any) => {
+          this.errorMessage = 'Error al analizar audio: ' + this.extractErrorMessage(err);
+          this.analyzingAudioIds.delete(audioId);
+          this.updateRowAnalyzingState(audioId, false);
+        },
+      });
+  }
+
+  private updateRowAnalyzingState(audioId: string, isAnalyzing: boolean): void {
+    const row = this.rows.find(r => r.audio._id === audioId);
+    if (row) {
+      row.isAnalyzing = isAnalyzing;
+      this.cdr.detectChanges();
+    }
+  }
+
   goToSummaries(audio: AudioEntity): void {
     const audioId = audio._id ?? '';
     void this.router.navigate(['/summaries'], { queryParams: { audioId } });
@@ -291,12 +383,13 @@ export class RecordingsComponent implements OnInit, OnDestroy {
         audio,
         transcriptions: audioTranscriptions,
         analyses: audioAnalyses,
+        isAnalyzing: this.analyzingAudioIds.has(audioId),
       };
     });
   }
 
-  private extractErrorMessage(error: HttpErrorResponse): string {
-    const message = error.error?.message;
+  private extractErrorMessage(error: HttpErrorResponse | any): string {
+    const message = error?.error?.message;
     if (typeof message === 'string' && message.trim().length > 0) {
       return message;
     }
@@ -317,4 +410,3 @@ export class RecordingsComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 }
-

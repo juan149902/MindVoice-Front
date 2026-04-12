@@ -605,14 +605,12 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     const storedUsername = this.tokenStorage.getUsername();
     this.username = storedUsername ?? 'Usuario';
 
-    // Subscribe to loading state from state service
     this.state.loading$
       .pipe(takeUntil(this.destroy$))
       .subscribe((isLoading) => {
         this.loading = isLoading;
       });
 
-    // Subscribe to data and update metrics
     combineLatest([
       this.state.audios$,
       this.state.transcriptions$,

@@ -532,6 +532,183 @@ export class SummariesComponent implements OnInit, OnDestroy {
   exportToDocument(summary: SummaryDisplay): void {
     if (!summary.analysis) return;
 
+    const exportType = prompt('Exportar como:\n1. PDF\n2. DOCX\n3. TXT', '1');
+    if (!exportType) return;
+
+    if (exportType === '1') {
+      this.exportToPDF(summary);
+    } else if (exportType === '2') {
+      this.exportToDOCX(summary);
+    } else if (exportType === '3') {
+      this.exportToTXT(summary);
+    }
+  }
+
+  private exportToPDF(summary: SummaryDisplay): void {
+    if (!summary.analysis) return;
+
+    const { jsPDF } = window as any;
+    const doc = new jsPDF();
+    
+    let yPosition = 20;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const maxWidth = pageWidth - 2 * margin;
+
+    doc.setFontSize(18);
+    doc.text('RESUMEN EJECUTIVO', margin, yPosition);
+    yPosition += 15;
+
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('Resumen:', margin, yPosition);
+    yPosition += 8;
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(11);
+    const resumeLines = doc.splitTextToSize(summary.analysis.result.resumen, maxWidth) as string[];
+    resumeLines.forEach((line: string) => {
+      if (yPosition > pageHeight - 20) {
+        doc.addPage();
+        yPosition = 20;
+      }
+      doc.text(line, margin, yPosition);
+      yPosition += 6;
+    });
+
+    yPosition += 5;
+    if (yPosition > pageHeight - 30) {
+      doc.addPage();
+      yPosition = 20;
+    }
+
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(12);
+    doc.text('Temas Identificados:', margin, yPosition);
+    yPosition += 8;
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(11);
+    (summary.analysis.result.temas || []).forEach(tema => {
+      if (yPosition > pageHeight - 20) {
+        doc.addPage();
+        yPosition = 20;
+      }
+      doc.text(`• ${tema}`, margin + 5, yPosition);
+      yPosition += 6;
+    });
+
+    yPosition += 5;
+    if (yPosition > pageHeight - 30) {
+      doc.addPage();
+      yPosition = 20;
+    }
+
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(12);
+    doc.text('Acciones Recomendadas:', margin, yPosition);
+    yPosition += 8;
+
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(11);
+    (summary.analysis.result.acciones || []).forEach(accion => {
+      if (yPosition > pageHeight - 20) {
+        doc.addPage();
+        yPosition = 20;
+      }
+      doc.text(`• ${accion.accion} (${accion.prioridad})`, margin + 5, yPosition);
+      yPosition += 6;
+    });
+
+    yPosition += 5;
+    if (yPosition > pageHeight - 30) {
+      doc.addPage();
+      yPosition = 20;
+    }
+
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(12);
+    doc.text(`Sentimiento: ${summary.analysis.result.sentimiento || 'No clasificado'}`, margin, yPosition);
+
+    doc.save(`summary-${summary.analysis._id}.pdf`);
+  }
+
+  private exportToDOCX(summary: SummaryDisplay): void {
+    if (!summary.analysis) return;
+
+    const { Document, Packer, Paragraph, AlignmentType, TextRun, BorderStyle } = (window as any).docx;
+    
+    const sections = [
+      new Paragraph({
+        text: 'RESUMEN EJECUTIVO',
+        heading: 'Heading1',
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 200 },
+        bold: true,
+        size: 32,
+      }),
+      new Paragraph({
+        text: 'Resumen:',
+        bold: true,
+        spacing: { before: 100, after: 100 },
+        size: 24,
+      }),
+      new Paragraph({
+        text: summary.analysis.result.resumen,
+        spacing: { after: 200 },
+        size: 22,
+      }),
+      new Paragraph({
+        text: 'Temas Identificados:',
+        bold: true,
+        spacing: { before: 100, after: 100 },
+        size: 24,
+      }),
+      ...((summary.analysis.result.temas || []).map(tema =>
+        new Paragraph({
+          text: tema,
+          spacing: { after: 50 },
+          indent: { left: 200 },
+          size: 22,
+        })
+      )),
+      new Paragraph({
+        text: 'Acciones Recomendadas:',
+        bold: true,
+        spacing: { before: 100, after: 100 },
+        size: 24,
+      }),
+      ...((summary.analysis.result.acciones || []).map(accion =>
+        new Paragraph({
+          text: `${accion.accion} (${accion.prioridad})`,
+          spacing: { after: 50 },
+          indent: { left: 200 },
+          size: 22,
+        })
+      )),
+      new Paragraph({
+        text: `Sentimiento: ${summary.analysis.result.sentimiento || 'No clasificado'}`,
+        spacing: { before: 100 },
+        bold: true,
+        size: 22,
+      }),
+    ];
+
+    const doc = new Document({ sections: [{ children: sections }] });
+    Packer.toBlob(doc).then((blob: any) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `summary-${summary.analysis?._id || 'export'}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  private exportToTXT(summary: SummaryDisplay): void {
+    if (!summary.analysis) return;
+
     const content = `
 RESUMEN EJECUTIVO
 =================
