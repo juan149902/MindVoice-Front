@@ -144,3 +144,71 @@ body.auth-hide-chatbot bp-widget {
   visibility: hidden !important;
   pointer-events: none !important;
 }
+
+.app-futuristic-shell {
+  isolation: isolate;
+}
+
+.app-futuristic-shell::before {
+  content: '';
+  position: absolute;
+  inset: -20% -12%;
+  pointer-events: none;
+  z-index: -2;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(139, 92, 246, 0.2), transparent 38%),
+    radial-gradient(circle at 86% 78%, rgba(56, 189, 248, 0.16), transparent 42%),
+    radial-gradient(circle at 45% 40%, rgba(15, 23, 42, 0.65), rgba(2, 6, 23, 0.8));
+}
+
+.app-futuristic-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+  background-size: 26px 26px;
+  opacity: 0.38;
+}
+
+.app-content-shell > * {
+  position: relative;
+}
+
+.app-content-shell section.rounded-xl,
+.app-content-shell section.rounded-2xl,
+.app-content-shell article.rounded-xl,
+.app-content-shell article.rounded-2xl {
+  box-shadow: 0 14px 40px rgba(2, 6, 23, 0.34);
+  backdrop-filter: blur(10px);
+}
+
+.app-content-shell .bg-surface-dark {
+  background-color: rgba(22, 17, 33, 0.72) !important;
+}
+
+.app-content-shell .border-border-dark {
+  border-color: rgba(148, 163, 184, 0.22) !important;
+}
+
+.app-content-shell .bg-background-dark {
+  background-color: rgba(11, 5, 20, 0.62) !important;
+}
+
+.theme-light .app-futuristic-shell::before {
+  background:
+    radial-gradient(circle at 8% 12%, rgba(124, 58, 237, 0.14), transparent 38%),
+    radial-gradient(circle at 86% 78%, rgba(56, 189, 248, 0.1), transparent 42%),
+    radial-gradient(circle at 45% 40%, rgba(255, 255, 255, 0.9), rgba(226, 232, 240, 0.95));
+}
+
+.theme-light .app-content-shell .bg-surface-dark {
+  background-color: rgba(255, 255, 255, 0.82) !important;
+}
+
+.theme-light .app-content-shell .bg-background-dark {
+  background-color: rgba(248, 250, 252, 0.86) !important;
+}

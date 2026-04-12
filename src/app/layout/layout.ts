@@ -1,16 +1,17 @@
-import { Component, HostListener, Inject, OnDestroy, OnInit, PLATFORM_ID, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, PLATFORM_ID, inject, signal } from '@angular/core';
 import { isPlatformBrowser, NgClass, NgIf } from '@angular/common';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '../core/services/auth.service';
 import { TokenStorageService } from '../core/services/token-storage.service';
+import { AppPreferencesService } from '../core/services/app-preferences.service';
 
 @Component({
   selector: 'app-layout',
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive, MatIconModule, NgIf, NgClass],
   template: `
-    <div class="relative flex h-screen overflow-hidden bg-background-dark text-white" [ngClass]="{ 'theme-light': isLightMode(), 'theme-dark': !isLightMode() }">
+    <div class="relative flex h-screen overflow-hidden bg-background-dark text-white app-futuristic-shell" [ngClass]="{ 'theme-light': theme() === 'light', 'theme-dark': theme() !== 'light' }">
       <button
         *ngIf="isMobile() && isSidebarOpen()"
         type="button"
@@ -28,10 +29,10 @@ import { TokenStorageService } from '../core/services/token-storage.service';
             <div class="flex items-center gap-3" [class.opacity-0]="!isMobile() && !isSidebarOpen()" [class.pointer-events-none]="!isMobile() && !isSidebarOpen()">
             <div class="size-15 shrink-0 flex items-center justify-center">
               <img
-                [src]="isLightMode() ? 'icons/Logo2.png' : 'icons/Logo1.png'"
+                [src]="theme() === 'light' ? 'icons/Logo2.png' : 'icons/Logo1.png'"
                 alt="Logo MindVoice"
                 class="object-contain"
-                [ngClass]="isLightMode() ? 'h-full w-full scale-[2.25]' : 'size-full'"
+                [ngClass]="theme() === 'light' ? 'h-full w-full scale-[2.25]' : 'size-full'"
               />
             </div>
             <div>
@@ -54,31 +55,35 @@ import { TokenStorageService } from '../core/services/token-storage.service';
           <nav class="flex flex-col gap-1 flex-1">
             <a routerLink="/dashboard" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" [routerLinkActiveOptions]="{exact: true}" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
               <mat-icon class="group-hover:text-primary">dashboard</mat-icon>
-              <p class="text-sm font-medium">Panel Principal</p>
+              <p class="text-sm font-medium">{{ t('nav.dashboard', 'Panel Principal') }}</p>
             </a>
-            <a routerLink="/library" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
+            <a routerLink="/ai-analysis" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
+              <mat-icon class="group-hover:text-primary">insights</mat-icon>
+              <p class="text-sm font-medium">{{ t('nav.aiAnalysis', 'Análisis IA') }}</p>
+            </a>
+            <a routerLink="/recordings" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
               <mat-icon class="group-hover:text-primary">mic</mat-icon>
-              <p class="text-sm font-medium">Grabaciones</p>
-            </a>
-            <a routerLink="/tags" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
-              <mat-icon class="group-hover:text-primary">local_offer</mat-icon>
-              <p class="text-sm font-medium">Etiquetas</p>
-            </a>
-            <a routerLink="/tasks" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
-              <mat-icon class="group-hover:text-primary">check_box</mat-icon>
-              <p class="text-sm font-medium">Tareas de Voz</p>
+              <p class="text-sm font-medium">{{ t('nav.recordings', 'Grabaciones') }}</p>
             </a>
             <a routerLink="/summaries" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
               <mat-icon class="group-hover:text-primary">auto_awesome</mat-icon>
-              <p class="text-sm font-medium">Resúmenes IA</p>
+              <p class="text-sm font-medium">{{ t('nav.summaries', 'Resúmenes IA') }}</p>
+            </a>
+            <a routerLink="/tasks" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
+              <mat-icon class="group-hover:text-primary">check_box</mat-icon>
+              <p class="text-sm font-medium">{{ t('nav.tasks', 'Tareas de Voz') }}</p>
             </a>
             <a routerLink="/mind-maps" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
               <mat-icon class="group-hover:text-primary">account_tree</mat-icon>
-              <p class="text-sm font-medium">Mapas Mentales</p>
+              <p class="text-sm font-medium">{{ t('nav.mindmaps', 'Mapas Mentales') }}</p>
+            </a>
+            <a routerLink="/tags" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
+              <mat-icon class="group-hover:text-primary">local_offer</mat-icon>
+              <p class="text-sm font-medium">{{ t('nav.tags', 'Etiquetas') }}</p>
             </a>
             <a routerLink="/settings" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
               <mat-icon class="group-hover:text-primary">settings</mat-icon>
-              <p class="text-sm font-medium">Configuración</p>
+              <p class="text-sm font-medium">{{ t('nav.settings', 'Configuración') }}</p>
             </a>
           </nav>
 
@@ -97,7 +102,7 @@ import { TokenStorageService } from '../core/services/token-storage.service';
               (click)="logout()"
             >
               <mat-icon>logout</mat-icon>
-              <span>Cerrar sesión</span>
+              <span>{{ t('nav.logout', 'Cerrar sesión') }}</span>
             </button>
           </div>
         </div>
@@ -118,20 +123,20 @@ import { TokenStorageService } from '../core/services/token-storage.service';
             </button>
             <div class="relative w-full max-w-md">
               <mat-icon class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">search</mat-icon>
-              <input class="w-full bg-background-dark/50 border border-border-dark rounded-lg pl-10 pr-4 h-10 text-sm focus:ring-2 focus:ring-primary focus:border-transparent text-gray-200 placeholder:text-gray-500 outline-none" placeholder="Buscar ideas, tareas o grabaciones..." type="text"/>
+              <input class="w-full bg-background-dark/50 border border-border-dark rounded-lg pl-10 pr-4 h-10 text-sm focus:ring-2 focus:ring-primary focus:border-transparent text-gray-200 placeholder:text-gray-500 outline-none" [placeholder]="t('layout.search', 'Buscar ideas, tareas o grabaciones...')" type="text"/>
             </div>
           </div>
           <div class="flex items-center gap-2 md:gap-4">
             <button
               type="button"
               class="flex size-10 items-center justify-center rounded-lg border transition-colors"
-              [ngClass]="isLightMode()
+              [ngClass]="theme() === 'light'
                 ? 'border-amber-300/60 bg-amber-400/10 text-amber-500 hover:bg-amber-400/20'
                 : 'border-border-dark text-sky-300 hover:bg-white/5 hover:text-sky-200'"
-              [attr.aria-label]="isLightMode() ? 'Activar modo oscuro' : 'Activar modo claro'"
+              [attr.aria-label]="theme() === 'light' ? 'Activar modo oscuro' : 'Activar modo claro'"
               (click)="toggleTheme()"
             >
-              <mat-icon>{{ isLightMode() ? 'light_mode' : 'dark_mode' }}</mat-icon>
+              <mat-icon>{{ theme() === 'light' ? 'light_mode' : 'dark_mode' }}</mat-icon>
             </button>
             <button class="hidden h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary-hover sm:flex">
               <mat-icon class="text-[20px]">sync</mat-icon>
@@ -144,7 +149,7 @@ import { TokenStorageService } from '../core/services/token-storage.service';
           </div>
         </header>
         
-        <div class="flex-1 overflow-y-auto">
+        <div class="flex-1 overflow-y-auto app-content-shell">
           <router-outlet></router-outlet>
         </div>
       </main>
@@ -154,23 +159,21 @@ import { TokenStorageService } from '../core/services/token-storage.service';
 export class LayoutComponent implements OnInit, OnDestroy {
   readonly isMobile = signal(false);
   readonly isSidebarOpen = signal(true);
-  readonly themeMode = signal<'dark' | 'light'>('dark');
   readonly currentUsername = signal<string>('');
   private readonly botpressInjectScriptId = 'botpress-webchat-inject';
   private readonly botpressConfigScriptId = 'botpress-webchat-config';
   private destroyed = false;
 
+  private readonly platformId = inject(PLATFORM_ID);
+  private readonly router = inject(Router);
   private readonly authService = inject(AuthService);
+  private readonly preferences = inject(AppPreferencesService);
   private readonly tokenStorage = inject(TokenStorageService);
-
-  constructor(
-    @Inject(PLATFORM_ID) private readonly platformId: object,
-    private readonly router: Router,
-  ) {}
+  readonly theme = this.preferences.theme;
 
   ngOnInit(): void {
     this.destroyed = false;
-    this.restoreTheme();
+    this.preferences.hydrate();
     this.syncViewportState();
     this.currentUsername.set(this.tokenStorage.getUsername() ?? 'Usuario');
 
@@ -202,22 +205,13 @@ export class LayoutComponent implements OnInit, OnDestroy {
   }
 
   toggleTheme(): void {
-    const nextTheme = this.isLightMode() ? 'dark' : 'light';
-    this.themeMode.set(nextTheme);
-
-    if (isPlatformBrowser(this.platformId)) {
-      localStorage.setItem('mindvoice-theme', nextTheme);
-    }
+    this.preferences.toggleTheme();
   }
 
   handleNavClick(): void {
     if (this.isMobile()) {
       this.closeSidebar();
     }
-  }
-
-  isLightMode(): boolean {
-    return this.themeMode() === 'light';
   }
 
   logout(): void {
@@ -254,15 +248,8 @@ export class LayoutComponent implements OnInit, OnDestroy {
     }
   }
 
-  private restoreTheme(): void {
-    if (!isPlatformBrowser(this.platformId)) {
-      return;
-    }
-
-    const storedTheme = localStorage.getItem('mindvoice-theme');
-    if (storedTheme === 'light' || storedTheme === 'dark') {
-      this.themeMode.set(storedTheme);
-    }
+  t(key: string, fallback: string): string {
+    return this.preferences.t(key) || fallback;
   }
 
   private loadBotpressChat(): void {

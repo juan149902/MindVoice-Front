@@ -13,6 +13,7 @@
   },
   "private": true,
   "dependencies": {
+    "@angular/animations": "^21.2.7",
     "@angular/cdk": "^21.0.0",
     "@angular/common": "^21.0.0",
     "@angular/compiler": "^21.0.0",
@@ -25,9 +26,11 @@
     "@angular/service-worker": "^21.2.1",
     "@angular/ssr": "^21.0.0",
     "@google/genai": "^1.27.0",
+    "chart.js": "^4.5.1",
     "express": "^5.1.0",
     "motion": "^12.23.24",
     "rxjs": "~7.8.0",
+    "socket.io-client": "^4.8.3",
     "tslib": "^2.3.0"
   },
   "devDependencies": {

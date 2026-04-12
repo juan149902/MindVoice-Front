@@ -1,5 +1,6 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import {RouterOutlet} from '@angular/router';
+import { AppPreferencesService } from './core/services/app-preferences.service';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -8,4 +9,10 @@ import {RouterOutlet} from '@angular/router';
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
-export class App {}
+export class App {
+  private readonly preferences = inject(AppPreferencesService);
+
+  constructor() {
+    this.preferences.hydrate();
+  }
+}

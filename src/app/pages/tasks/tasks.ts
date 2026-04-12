@@ -1,156 +1,341 @@
-import { Component } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, PLATFORM_ID, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
+import { Observable, Subject, map, takeUntil } from 'rxjs';
+import {
+  AiAnalysisEntity,
+  TranscriptionEntity,
+} from '../../core/services/audio-workflow.service';
+import { StateManagementService } from '../../core/services/state-management.service';
+
+type PriorityFilter = 'all' | 'alta' | 'media' | 'baja';
+
+interface DerivedTask {
+  id: string;
+  analysisId: string;
+  transcriptionId: string;
+  accion: string;
+  prioridad: string;
+  createdAt?: string;
+}
 
 @Component({
   selector: 'app-tasks',
   standalone: true,
-  imports: [MatIconModule],
+  imports: [CommonModule, FormsModule, MatIconModule],
   template: `
-    <div class="p-8 h-full flex flex-col">
-      <div class="flex justify-between items-end mb-6 shrink-0">
-        <div>
-          <h2 class="text-white text-3xl font-black tracking-tight">Gestor de Tareas</h2>
-          <p class="text-gray-400 text-sm mt-1">Organiza las tareas extraídas de tus grabaciones de voz con IA</p>
-        </div>
-        <div class="flex gap-2">
-          <button class="flex items-center gap-2 px-4 h-10 bg-surface-dark border border-border-dark rounded-lg text-sm font-semibold hover:bg-white/5 transition-colors">
-            <mat-icon class="text-[18px]">add</mat-icon>
-            Nueva Tarea
+    <div class="p-8 max-w-[1200px] mx-auto w-full space-y-6">
+      <!-- Header -->
+      <section class="rounded-2xl bg-gradient-to-br from-rose-500/20 via-surface-dark/90 to-orange-900/20 border border-rose-500/30 p-6 space-y-4 backdrop-blur-sm">
+        <div class="flex items-center justify-between gap-4 flex-wrap">
+          <div class="space-y-2">
+            <h1 class="text-4xl font-black text-white">Tareas Detectadas</h1>
+            <p class="text-gray-300 text-sm">Listado operativo generado desde <code class="bg-black/30 px-2 py-1 rounded text-primary">ai-analyses.result.acciones</code>.</p>
+          </div>
+          <button
+            type="button"
+            class="h-11 px-5 rounded-lg bg-gradient-to-r from-rose-500 to-orange-500 border border-rose-400/40 text-sm font-semibold text-white hover:shadow-[0_0_20px_rgba(244,63,94,0.4)] transition-all duration-300"
+            (click)="refreshData()"
+            [disabled]="(loading$ | async)"
+          >
+            <span class="inline-flex items-center gap-2">
+              <mat-icon class="text-lg" [class.animate-spin]="(loading$ | async)">refresh</mat-icon>
+              {{ (loading$ | async) ? 'Cargando...' : 'Recargar' }}
+            </span>
           </button>
         </div>
-      </div>
+      </section>
 
-      <div class="flex border-b border-border-dark gap-8 shrink-0">
-        <button class="flex items-center gap-2 border-b-2 border-primary text-primary pb-3 pt-2 font-bold text-sm">
-          <mat-icon class="text-[18px]">view_kanban</mat-icon>
-          Tablero Kanban
-        </button>
-        <button class="flex items-center gap-2 border-b-2 border-transparent text-gray-500 pb-3 pt-2 font-medium text-sm hover:text-gray-300 transition-colors">
-          <mat-icon class="text-[18px]">list</mat-icon>
-          Vista de Lista
-        </button>
-      </div>
+      @if (error$ | async) {
+        <section class="rounded-xl border border-rose-500/40 bg-gradient-to-r from-rose-500/20 to-rose-500/10 p-4 text-sm text-rose-200 backdrop-blur-sm">
+          {{ error$ | async }}
+        </section>
+      }
 
-      <div class="flex gap-3 py-4 flex-wrap shrink-0">
-        <button class="flex h-8 items-center gap-2 rounded-lg bg-surface-dark border border-border-dark px-3 text-sm font-medium text-gray-300 hover:border-gray-500 transition-colors">
-          <mat-icon class="text-[18px]">filter_list</mat-icon>
-          Todas las fuentes
-          <mat-icon class="text-[18px]">expand_more</mat-icon>
-        </button>
-        <button class="flex h-8 items-center gap-2 rounded-lg bg-orange-500/10 text-orange-400 px-3 text-sm font-bold border border-orange-500/20">
-          Prioridad Alta
-          <mat-icon class="text-[18px]">close</mat-icon>
-        </button>
-      </div>
+      <!-- Filters Card -->
+      <section class="rounded-xl border border-white/10 bg-surface-dark/60 p-6 space-y-4 backdrop-blur-sm">
+        <h2 class="text-lg font-bold text-white">Filtros activos</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="space-y-1">
+            <label for="task-search" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Buscar</label>
+            <input
+              id="task-search"
+              type="text"
+              [(ngModel)]="searchTerm"
+              (ngModelChange)="onFiltersChanged()"
+              class="w-full h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-100"
+              placeholder="Acción, ID o texto..."
+            />
+          </div>
 
-      <div class="flex-1 overflow-x-auto pb-4 scrollbar-hide">
-        <div class="flex gap-6 h-full min-w-[1000px]">
-          
-          <!-- Column 1 -->
-          <div class="flex-1 flex flex-col gap-4 min-w-[320px]">
-            <div class="flex items-center justify-between px-2">
-              <div class="flex items-center gap-2">
-                <h3 class="font-bold text-white">Pendientes</h3>
-                <span class="bg-surface-dark border border-border-dark px-2 py-0.5 rounded text-xs font-bold text-gray-400">2</span>
-              </div>
-              <button class="text-gray-500 hover:text-gray-300"><mat-icon>more_horiz</mat-icon></button>
+          <div class="space-y-1">
+            <label for="task-priority" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+              Prioridad
+            </label>
+            <select
+              id="task-priority"
+              [(ngModel)]="priorityFilter"
+              (ngModelChange)="onFiltersChanged()"
+              class="w-full h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-100"
+            >
+              <option value="all">Todas</option>
+              <option value="alta">Alta</option>
+              <option value="media">Media</option>
+              <option value="baja">Baja</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div class="rounded-lg border border-white/10 bg-background-dark p-3">
+              <p class="text-xs text-gray-400">Alta</p>
+              <p class="text-xl font-bold text-white">{{ countByPriority('alta') }}</p>
             </div>
-            
-            <div class="flex flex-col gap-3">
-              <div class="bg-surface-dark p-4 rounded-xl border border-border-dark shadow-lg hover:border-primary/50 transition-all group cursor-pointer">
-                <div class="flex justify-between items-start mb-2">
-                  <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">Alta</span>
-                  <input type="checkbox" class="rounded bg-background-dark border-border-dark text-primary focus:ring-primary size-4"/>
-                </div>
-                <p class="text-sm font-semibold text-gray-100 mb-3 group-hover:text-white">Esquematizar reporte de mercado basado en entrevista</p>
-                <div class="flex flex-col gap-2">
-                  <a href="#" class="flex items-center gap-1.5 text-[11px] text-primary font-semibold hover:text-primary/80">
-                    <mat-icon class="text-[14px]">mic</mat-icon>
-                    Extraída de: [Grabación - Cliente Mayo 12]
-                  </a>
-                  <div class="flex items-center gap-1.5 text-[11px] text-gray-500">
-                    <mat-icon class="text-[14px]">calendar_today</mat-icon>
-                    Vence: 15 de Mayo, 2024
+            <div class="rounded-lg border border-white/10 bg-background-dark p-3">
+              <p class="text-xs text-gray-400">Media</p>
+              <p class="text-xl font-bold text-white">{{ countByPriority('media') }}</p>
+            </div>
+            <div class="rounded-lg border border-white/10 bg-background-dark p-3">
+              <p class="text-xs text-gray-400">Baja</p>
+              <p class="text-xl font-bold text-white">{{ countByPriority('baja') }}</p>
+            </div>
+          </div>
+        </div>
+
+        @if ((loading$ | async)) {
+          <p class="text-sm text-gray-400">Cargando tareas...</p>
+        } @else if (pagedTasks.length === 0) {
+          <p class="text-sm text-gray-400">No hay tareas para el filtro actual.</p>
+        } @else {
+          <div class="space-y-3">
+            @for (task of pagedTasks; track task.id) {
+              <article class="rounded-lg border border-border-dark p-4 space-y-3">
+                <div class="flex items-start justify-between gap-4">
+                  <div class="min-w-0">
+                    <p class="text-sm font-semibold text-white">{{ task.accion }}</p>
+                    <p class="text-xs text-gray-500 mt-1">
+                      Prioridad: {{ task.prioridad.toUpperCase() }} ·
+                      Análisis: {{ task.analysisId }} ·
+                      Transcripción: {{ task.transcriptionId }}
+                    </p>
                   </div>
-                </div>
-              </div>
 
-              <div class="bg-surface-dark p-4 rounded-xl border border-border-dark shadow-lg hover:border-primary/50 transition-all group cursor-pointer">
-                <div class="flex justify-between items-start mb-2">
-                  <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">Baja</span>
-                  <input type="checkbox" class="rounded bg-background-dark border-border-dark text-primary focus:ring-primary size-4"/>
+                  <button
+                    type="button"
+                    class="p-2 rounded-md text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
+                    (click)="deleteAnalysis(task.analysisId)"
+                    [disabled]="false"
+                    title="Eliminar análisis origen"
+                  >
+                    <mat-icon class="text-lg">delete</mat-icon>
+                  </button>
                 </div>
-                <p class="text-sm font-semibold text-gray-100 mb-3 group-hover:text-white">Enviar correo de seguimiento al equipo de diseño</p>
-                <div class="flex flex-col gap-2">
-                  <a href="#" class="flex items-center gap-1.5 text-[11px] text-primary font-semibold hover:text-primary/80">
-                    <mat-icon class="text-[14px]">mic</mat-icon>
-                    Extraída de: [Grabación - Ideas Mañana]
-                  </a>
-                </div>
-              </div>
-            </div>
+
+                <p class="text-sm text-gray-300 line-clamp-3">
+                  {{ getTranscriptionPreview(task.transcriptionId) }}
+                </p>
+              </article>
+            }
           </div>
 
-          <!-- Column 2 -->
-          <div class="flex-1 flex flex-col gap-4 min-w-[320px]">
-            <div class="flex items-center justify-between px-2">
-              <div class="flex items-center gap-2">
-                <h3 class="font-bold text-white">En Progreso</h3>
-                <span class="bg-surface-dark border border-border-dark px-2 py-0.5 rounded text-xs font-bold text-gray-400">1</span>
-              </div>
-              <button class="text-gray-500 hover:text-gray-300"><mat-icon>more_horiz</mat-icon></button>
-            </div>
-            
-            <div class="flex flex-col gap-3">
-              <div class="bg-surface-dark p-4 rounded-xl border-l-4 border-l-yellow-500 border border-border-dark shadow-lg hover:border-primary/50 transition-all group cursor-pointer">
-                <div class="flex justify-between items-start mb-2">
-                  <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-500 border border-yellow-500/30">Media</span>
-                  <input type="checkbox" class="rounded bg-background-dark border-border-dark text-primary focus:ring-primary size-4"/>
-                </div>
-                <p class="text-sm font-semibold text-gray-100 mb-3 group-hover:text-white">Finalizar documentación de librería de componentes</p>
-                <div class="flex flex-col gap-2">
-                  <a href="#" class="flex items-center gap-1.5 text-[11px] text-primary font-semibold hover:text-primary/80">
-                    <mat-icon class="text-[14px]">mic</mat-icon>
-                    Extraída de: [Grabación - Dev Update]
-                  </a>
-                </div>
-                <div class="mt-4 w-full bg-background-dark h-1.5 rounded-full overflow-hidden">
-                  <div class="bg-yellow-500 h-full w-[65%] shadow-[0_0_8px_rgba(234,179,8,0.5)]"></div>
-                </div>
-              </div>
+          <div class="pt-2 flex items-center justify-between text-sm text-gray-400">
+            <span>Página {{ currentPage }} de {{ totalPages }}</span>
+            <div class="flex gap-2">
+              <button
+                type="button"
+                class="h-9 px-3 rounded-lg border border-border-dark hover:bg-border-dark/70 disabled:opacity-40"
+                (click)="previousPage()"
+                [disabled]="currentPage <= 1"
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                class="h-9 px-3 rounded-lg border border-border-dark hover:bg-border-dark/70 disabled:opacity-40"
+                (click)="nextPage()"
+                [disabled]="currentPage >= totalPages"
+              >
+                Siguiente
+              </button>
             </div>
           </div>
-
-          <!-- Column 3 -->
-          <div class="flex-1 flex flex-col gap-4 min-w-[320px]">
-            <div class="flex items-center justify-between px-2">
-              <div class="flex items-center gap-2">
-                <h3 class="font-bold text-white">Completadas</h3>
-                <span class="bg-surface-dark border border-border-dark px-2 py-0.5 rounded text-xs font-bold text-gray-400">12</span>
-              </div>
-              <button class="text-gray-500 hover:text-gray-300"><mat-icon>more_horiz</mat-icon></button>
-            </div>
-            
-            <div class="flex flex-col gap-3 opacity-60 grayscale-[0.5]">
-              <div class="bg-surface-dark p-4 rounded-xl border border-border-dark shadow-sm">
-                <div class="flex justify-between items-start mb-2">
-                  <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-gray-500/20 text-gray-400 border border-border-dark">Finalizada</span>
-                  <input type="checkbox" checked class="rounded bg-background-dark border-border-dark text-primary focus:ring-primary size-4"/>
-                </div>
-                <p class="text-sm font-semibold text-gray-400 mb-3 line-through">Preparar agenda de reunión para el martes</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Add Column -->
-          <button class="w-[320px] border-2 border-dashed border-border-dark rounded-xl flex items-center justify-center text-gray-500 hover:text-gray-300 hover:bg-white/5 hover:border-gray-600 transition-all h-24 group shrink-0">
-            <mat-icon class="mr-2 group-hover:scale-110 transition-transform">add</mat-icon>
-            <span class="font-bold">Añadir Columna</span>
-          </button>
-
-        </div>
-      </div>
+        }
+      </section>
     </div>
-  `
+  `,
 })
-export class TasksComponent {}
+export class TasksComponent implements OnInit, OnDestroy {
+  private readonly state = inject(StateManagementService);
+  private readonly platformId = inject(PLATFORM_ID);
+  private readonly destroy$ = new Subject<void>();
+
+  loading$: Observable<boolean> = this.state.loading$;
+  error$: Observable<string | null> = this.state.error$;
+  
+  analyses$: Observable<AiAnalysisEntity[]> = this.state.analyses$;
+  transcriptions$: Observable<TranscriptionEntity[]> = this.state.transcriptions$;
+
+  searchTerm = '';
+  priorityFilter: PriorityFilter = 'all';
+  currentPage = 1;
+  readonly pageSize = 8;
+
+  private transcriptionsById = new Map<string, TranscriptionEntity>();
+  private currentAnalyses: AiAnalysisEntity[] = [];
+
+  ngOnInit(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
+    this.transcriptions$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((transcriptions) => {
+        this.transcriptionsById = new Map(
+          transcriptions
+            .filter((item): item is TranscriptionEntity & { _id: string } => typeof item._id === 'string')
+            .map((item) => [item._id, item]),
+        );
+      });
+
+    this.analyses$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((analyses) => {
+        this.currentAnalyses = analyses;
+        this.currentPage = 1;
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  get tasks(): DerivedTask[] {
+    const derived: DerivedTask[] = [];
+
+    for (const analysis of this.currentAnalyses) {
+      const analysisId = analysis._id || '';
+      if (!analysisId) {
+        continue;
+      }
+
+      const actions = analysis.result.acciones ?? [];
+      actions.forEach((action, index) => {
+        const accion = action.accion?.trim();
+        if (!accion) {
+          return;
+        }
+
+        derived.push({
+          id: `${analysisId}-${index}`,
+          analysisId,
+          transcriptionId: analysis.transcriptionId,
+          accion,
+          prioridad: this.normalizePriority(action.prioridad),
+          createdAt: analysis.createdAt,
+        });
+      });
+    }
+
+    return derived;
+  }
+
+  get filteredTasks(): DerivedTask[] {
+    const term = this.searchTerm.trim().toLocaleLowerCase();
+    return this.tasks.filter((task) => {
+      if (this.priorityFilter !== 'all' && task.prioridad !== this.priorityFilter) {
+        return false;
+      }
+
+      if (!term) {
+        return true;
+      }
+
+      const transcription = this.transcriptionsById.get(task.transcriptionId);
+      const preview = transcription?.text.toLocaleLowerCase() || '';
+
+      return (
+        task.accion.toLocaleLowerCase().includes(term) ||
+        task.analysisId.toLocaleLowerCase().includes(term) ||
+        task.transcriptionId.toLocaleLowerCase().includes(term) ||
+        preview.includes(term)
+      );
+    });
+  }
+
+  get totalPages(): number {
+    return Math.max(1, Math.ceil(this.filteredTasks.length / this.pageSize));
+  }
+
+  get pagedTasks(): DerivedTask[] {
+    const start = (this.currentPage - 1) * this.pageSize;
+    return this.filteredTasks.slice(start, start + this.pageSize);
+  }
+
+  refreshData(): void {
+    this.state.refreshAllData();
+  }
+
+  deleteAnalysis(analysisId: string): void {
+    if (!analysisId) {
+      return;
+    }
+
+    if (!globalThis.confirm('¿Eliminar el análisis origen de esta tarea?')) {
+      return;
+    }
+
+    this.state.deleteAnalysis(analysisId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe();
+  }
+
+  getTranscriptionPreview(transcriptionId: string): string {
+    const text = this.transcriptionsById.get(transcriptionId)?.text || '';
+    if (!text) {
+      return 'Sin texto de transcripción asociado.';
+    }
+
+    return text.length > 220 ? `${text.slice(0, 220)}...` : text;
+  }
+
+  countByPriority(priority: 'alta' | 'media' | 'baja'): number {
+    return this.tasks.filter((task) => task.prioridad === priority).length;
+  }
+
+  onFiltersChanged(): void {
+    this.currentPage = 1;
+    this.ensurePaginationBounds();
+  }
+
+  previousPage(): void {
+    if (this.currentPage > 1) {
+      this.currentPage -= 1;
+    }
+  }
+
+  nextPage(): void {
+    if (this.currentPage < this.totalPages) {
+      this.currentPage += 1;
+    }
+  }
+
+  private ensurePaginationBounds(): void {
+    if (this.currentPage > this.totalPages) {
+      this.currentPage = this.totalPages;
+    }
+    if (this.currentPage < 1) {
+      this.currentPage = 1;
+    }
+  }
+
+  private normalizePriority(priority: string): string {
+    const normalized = priority.trim().toLocaleLowerCase();
+    if (normalized === 'alta' || normalized === 'media' || normalized === 'baja') {
+      return normalized;
+    }
+    return 'media';
+  }
+}

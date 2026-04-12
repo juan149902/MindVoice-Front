@@ -605,14 +605,16 @@ export class AuthComponent implements OnInit, OnDestroy, AfterViewInit {
     this.loading = true;
 
     if (this.isRegister()) {
+      // El backend Flask usa { username, email, password, name } para registro (POST /users/)
       this.authService.register({
-        username,
+        username: username,
         email: this.email.trim().toLowerCase(),
         password: this.password,
         name: this.fullName.trim(),
       }).subscribe({
         next: () => {
           this.successMessage = 'Cuenta creada. Iniciando sesión...';
+          // Después del registro, hacer login con username
           this.loginWithCredentials(username, this.password);
         },
         error: (error: HttpErrorResponse) => {
@@ -623,6 +625,7 @@ export class AuthComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    // Para login, usar username
     this.loginWithCredentials(username, this.password);
   }
 
@@ -670,6 +673,7 @@ export class AuthComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private loginWithCredentials(username: string, password: string): void {
+    // El backend Flask usa { username, password } para login
     this.authService.login({ username, password }).pipe(
       finalize(() => {
         this.loading = false;
