@@ -1,21 +1,24 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, from } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import { Observable } from 'rxjs';
+import { API_BASE_URL } from '../config/api.config';
 
 @Injectable({ providedIn: 'root' })
 export class AudioDownloaderService {
   private http = inject(HttpClient);
+  private apiBaseUrl = inject(API_BASE_URL);
 
-  downloadAudioBlob(url: string): Observable<Blob> {
+  downloadAudioBlob(filePath: string): Observable<Blob> {
+    // Si filePath es una URL completa, usarla directamente
+    const url = filePath.startsWith('http') ? filePath : `${this.apiBaseUrl}${filePath}`;
     return this.http.get(url, {
       responseType: 'blob',
     });
   }
 
-  async downloadAudioBlobPromise(url: string): Promise<Blob> {
+  async downloadAudioBlobPromise(filePath: string): Promise<Blob> {
     return new Promise((resolve, reject) => {
-      this.downloadAudioBlob(url).subscribe({
+      this.downloadAudioBlob(filePath).subscribe({
         next: (blob) => resolve(blob),
         error: (err) => reject(err),
       });
