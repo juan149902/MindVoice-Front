@@ -156,39 +156,82 @@ export class StateManagementService {
     this.loadingSubject.next(true);
     this.errorSubject.next(null);
 
-    // Load all data in parallel, not sequentially
-    combineLatest([
-      this.audioWorkflow.listAudios(),
-      this.audioWorkflow.listTranscriptions(),
-      this.audioWorkflow.listAnalyses(),
-      this.mindmapWorkflow.listWorkspaceItemsProgressive(),
-      this.resourceApi.list('folders'),
-      this.resourceApi.list('documents'),
-      this.tagsService.loadTags(),
-    ])
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: ([audios, transcriptions, analyses, mindmaps, folders, documents, tags]) => {
+    // Load all data in parallel with progressive updates
+    // Each source emits independently so UI updates as data arrives
+    this.audioWorkflow.listAudios()
+      .pipe(
+        tap(audios => {
           const currentState = this.stateSubject.getValue();
-          this.stateSubject.next({
-            ...currentState,
-            audios: audios || [],
-            transcriptions: transcriptions || [],
-            analyses: analyses || [],
-            mindmaps: mindmaps || [],
-            folders: folders || [],
-            documents: documents || [],
+          this.stateSubject.next({ ...currentState, audios: audios || [] });
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({ error: (err) => console.error('Error loading audios:', err) });
+
+    this.audioWorkflow.listTranscriptions()
+      .pipe(
+        tap(transcriptions => {
+          const currentState = this.stateSubject.getValue();
+          this.stateSubject.next({ ...currentState, transcriptions: transcriptions || [] });
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({ error: (err) => console.error('Error loading transcriptions:', err) });
+
+    this.audioWorkflow.listAnalyses()
+      .pipe(
+        tap(analyses => {
+          const currentState = this.stateSubject.getValue();
+          this.stateSubject.next({ ...currentState, analyses: analyses || [] });
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({ error: (err) => console.error('Error loading analyses:', err) });
+
+    this.mindmapWorkflow.listWorkspaceItemsProgressive()
+      .pipe(
+        tap(mindmaps => {
+          const currentState = this.stateSubject.getValue();
+          this.stateSubject.next({ ...currentState, mindmaps: mindmaps || [] });
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({ error: (err) => console.error('Error loading mindmaps:', err) });
+
+    this.resourceApi.list('folders')
+      .pipe(
+        tap(folders => {
+          const currentState = this.stateSubject.getValue();
+          this.stateSubject.next({ ...currentState, folders: folders || [] });
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({ error: (err) => console.error('Error loading folders:', err) });
+
+    this.resourceApi.list('documents')
+      .pipe(
+        tap(documents => {
+          const currentState = this.stateSubject.getValue();
+          this.stateSubject.next({ ...currentState, documents: documents || [] });
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({ error: (err) => console.error('Error loading documents:', err) });
+
+    this.tagsService.loadTags()
+      .pipe(
+        tap(tags => {
+          const currentState = this.stateSubject.getValue();
+          this.stateSubject.next({ 
+            ...currentState, 
             tags: tags || [],
             lastUpdated: new Date(),
+            loading: false,
           });
-          this.loadingSubject.next(false);
-        },
-        error: (err) => {
-          const errorMsg = err?.message || 'Error al cargar los datos';
-          this.errorSubject.next(errorMsg);
-          this.loadingSubject.next(false);
-        },
-      });
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({ error: (err) => console.error('Error loading tags:', err) });
   }
 
   // Audio actions
