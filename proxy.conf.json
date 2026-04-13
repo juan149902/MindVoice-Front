@@ -1,0 +1,18 @@
+{
+  "/api": {
+    "target": "http://18.223.30.63:5000",
+    "secure": false,
+    "changeOrigin": true,
+    "pathRewrite": {
+      "^/api": ""
+    },
+    "logLevel": "warn"
+  },
+  "/socket.io": {
+    "target": "ws://18.223.30.63:5000",
+    "secure": false,
+    "ws": true,
+    "changeOrigin": true,
+    "logLevel": "warn"
+  }
+}

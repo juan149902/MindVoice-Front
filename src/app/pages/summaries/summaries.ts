@@ -9,6 +9,7 @@ import {
   AiAnalysisEntity,
 } from '../../core/services/audio-workflow.service';
 import { StateManagementService } from '../../core/services/state-management.service';
+import { AudioDownloaderService } from '../../core/services/audio-downloader.service';
 
 interface SummaryDisplay {
   audio?: AudioEntity;
@@ -354,6 +355,7 @@ export class SummariesComponent implements OnInit, OnDestroy {
   private readonly destroy$ = new Subject<void>();
   private readonly fb = inject(FormBuilder);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly audioDownloader = inject(AudioDownloaderService);
 
   loading$: Observable<boolean> = this.state.loading$;
   error$: Observable<string | null> = this.state.error$;
@@ -508,7 +510,9 @@ export class SummariesComponent implements OnInit, OnDestroy {
 
   playAudio(audio: AudioEntity): void {
     if (this.audioPlayer && audio.filePath) {
-      this.audioPlayer.nativeElement.src = audio.filePath;
+      this.audioPlayer.nativeElement.src =
+        this.audioDownloader.resolveAudioCandidates(audio.filePath)[0]
+        ?? this.audioDownloader.resolveAudioUrl(audio.filePath);
       this.audioPlayer.nativeElement.play();
     }
   }

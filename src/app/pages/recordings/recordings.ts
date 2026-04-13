@@ -89,7 +89,7 @@ interface RecordingRow {
                 </div>
 
                 @if (isPlayableUrl(row.audio.filePath)) {
-                  <audio [src]="row.audio.filePath" controls class="w-full"></audio>
+                  <audio [src]="getAudioUrl(row.audio.filePath)" controls class="w-full"></audio>
                 } @else {
                   <p class="text-xs text-gray-400">
                     Vista previa no disponible para esta ruta de almacenamiento.
@@ -159,7 +159,7 @@ export class RecordingsComponent implements OnInit {
     ]);
 
     this.rows$ = combined$.pipe(
-      map(([audios, transcriptions, analyses, analyzingIds]: any) => {
+      map(([audios, transcriptions, analyses, analyzingIds]) => {
         return (audios || []).map((audio: AudioEntity) => ({
           audio,
           transcriptions: (transcriptions || []).filter((t: TranscriptionEntity) => t.audioId === audio._id),
@@ -257,6 +257,15 @@ export class RecordingsComponent implements OnInit {
 
   isPlayableUrl(filePath: string): boolean {
     if (!filePath) return false;
-    return filePath.startsWith('http') || filePath.startsWith('blob:') || filePath.startsWith('/');
+    const trimmed = filePath.trim();
+    return trimmed.startsWith('http://')
+      || trimmed.startsWith('https://')
+      || trimmed.startsWith('blob:')
+      || trimmed.startsWith('data:')
+      || trimmed.startsWith('/');
+  }
+
+  getAudioUrl(filePath: string): string {
+    return this.audioDownloader.resolveAudioCandidates(filePath)[0] ?? this.audioDownloader.resolveAudioUrl(filePath);
   }
 }

@@ -4,6 +4,7 @@
  */
 import { Injectable, inject } from '@angular/core';
 import { Observable, of, timeout, catchError, map } from 'rxjs';
+import { API_BASE_URL } from '../config/api.config';
 import { ApiHttpService } from './api-http.service';
 
 export interface HealthStatus {
@@ -16,6 +17,7 @@ export interface HealthStatus {
 @Injectable({ providedIn: 'root' })
 export class HealthCheckService {
   private readonly api = inject(ApiHttpService);
+  private readonly apiBaseUrl = inject(API_BASE_URL);
 
   /**
    * Verifica si el backend está disponible
@@ -23,7 +25,7 @@ export class HealthCheckService {
    */
   check(): Observable<HealthStatus> {
     const startTime = Date.now();
-    const apiUrl = (globalThis as Record<string, unknown>)['API_BASE_URL'] as string ?? 'http://18.223.30.63:5000';
+    const apiUrl = this.apiBaseUrl;
 
     return this.api.get<unknown>('').pipe(
       timeout(5000),

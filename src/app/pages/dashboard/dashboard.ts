@@ -1,7 +1,7 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, OnInit, PLATFORM_ID, inject, AfterViewInit, ViewChild, ElementRef, OnDestroy } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
-import { Observable, Subject, takeUntil, map, combineLatest } from 'rxjs';
+import { Observable, Subject, takeUntil, map, combineLatest, debounceTime } from 'rxjs';
 import {
   AiAnalysisEntity,
   TranscriptionEntity,
@@ -605,6 +605,9 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     const storedUsername = this.tokenStorage.getUsername();
     this.username = storedUsername ?? 'Usuario';
 
+    // Ensure state is initialized once
+    this.state.ensureInitialized();
+
     this.state.loading$
       .pipe(takeUntil(this.destroy$))
       .subscribe((isLoading) => {
@@ -616,7 +619,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       this.state.transcriptions$,
       this.state.analyses$,
     ])
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        debounceTime(300),
+        takeUntil(this.destroy$)
+      )
       .subscribe(([audios, transcriptions, analyses]) => {
         this.metrics = { ...this.metrics, audios: audios.length, transcriptions: transcriptions.length, analyses: analyses.length };
         this.animateCounters(this.metrics);
@@ -624,9 +630,6 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       });
 
     this.loadFoldersDocumentsAndTags();
-    
-    // Force immediate data load without delay
-    this.state.refreshAllData();
   }
 
   ngAfterViewInit(): void {

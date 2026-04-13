@@ -18,7 +18,7 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
   const router = inject(Router);
   const baseUrl = inject(API_BASE_URL).replace(/\/$/, '');
 
-  const isApiRequest = req.url.startsWith(baseUrl) || req.url.includes('18.223.30.63:5000');
+  const isApiRequest = req.url.startsWith(baseUrl) || req.url.startsWith('/api/') || req.url.includes('18.223.30.63:5000');
   if (!isApiRequest) {
     return next(req);
   }

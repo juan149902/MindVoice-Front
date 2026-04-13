@@ -136,20 +136,28 @@ export class StateManagementService {
     shareReplay(1),
   );
 
+  private initialized = false;
+
   constructor() {
     this.initializeDataSync();
   }
 
   private initializeDataSync(): void {
-    // Listen to workflow events and refresh all data
+    // Listen to workflow events and refresh all data on actual changes
     this.workflowEvents.changed$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
-        this.refreshAllData();
+        if (this.initialized) {
+          this.refreshAllData();
+        }
       });
+  }
 
-    // Initial load
-    this.refreshAllData();
+  ensureInitialized(): void {
+    if (!this.initialized) {
+      this.initialized = true;
+      this.refreshAllData();
+    }
   }
 
   refreshAllData(): void {
