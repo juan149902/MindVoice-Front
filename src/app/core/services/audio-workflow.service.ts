@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { forkJoin, map, Observable, switchMap, throwError } from 'rxjs';
+import { forkJoin, map, Observable, switchMap, throwError, shareReplay, BehaviorSubject } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { ApiEntity } from '../models/api.models';
 import { ApiHttpService } from './api-http.service';
@@ -103,6 +103,11 @@ export class AudioWorkflowService {
   private readonly api = inject(ApiHttpService);
   private readonly tokenStorage = inject(TokenStorageService);
 
+  // Cache observables with shareReplay for instant subsequent requests
+  private audioCache$ = new BehaviorSubject<Observable<AudioEntity[]> | null>(null);
+  private transcriptionCache$ = new BehaviorSubject<Observable<TranscriptionEntity[]> | null>(null);
+  private analysisCache$ = new BehaviorSubject<Observable<AiAnalysisEntity[]> | null>(null);
+
   getCurrentUserId(): string {
     const userId = this.tokenStorage.getUserId();
     if (!userId) {
@@ -112,9 +117,20 @@ export class AudioWorkflowService {
   }
 
   listAudios(): Observable<AudioEntity[]> {
-    return this.resourceApi
+    const cached = this.audioCache$.getValue();
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = this.resourceApi
       .list<AudioEntity>('audios')
-      .pipe(map((audios) => this.sortByDateDesc(audios)));
+      .pipe(
+        map((audios) => this.sortByDateDesc(audios)),
+        shareReplay(1)
+      );
+
+    this.audioCache$.next(request$);
+    return request$;
   }
 
   createAudio(payload: CreateAudioPayload): Observable<AudioEntity> {
@@ -131,12 +147,24 @@ export class AudioWorkflowService {
   }
 
   listTranscriptions(): Observable<TranscriptionEntity[]> {
-    return this.resourceApi
+    const cached = this.transcriptionCache$.getValue();
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = this.resourceApi
       .list<TranscriptionEntity>('transcriptions')
-      .pipe(map((transcriptions) => this.sortByDateDesc(transcriptions)));
+      .pipe(
+        map((transcriptions) => this.sortByDateDesc(transcriptions)),
+        shareReplay(1)
+      );
+
+    this.transcriptionCache$.next(request$);
+    return request$;
   }
 
   createTranscription(payload: CreateTranscriptionPayload): Observable<TranscriptionEntity> {
+    this.transcriptionCache$.next(null); // Invalidate cache
     return this.resourceApi.create<TranscriptionEntity, CreateTranscriptionPayload>(
       'transcriptions',
       {
@@ -148,21 +176,42 @@ export class AudioWorkflowService {
   }
 
   deleteTranscription(transcriptionId: string): Observable<void> {
+    this.transcriptionCache$.next(null); // Invalidate cache
     return this.resourceApi.remove('transcriptions', transcriptionId);
   }
 
   listAnalyses(): Observable<AiAnalysisEntity[]> {
-    return this.resourceApi
+    const cached = this.analysisCache$.getValue();
+    if (cached) {
+      return cached;
+    }
+
+    const request$ = this.resourceApi
       .list<AiAnalysisEntity>('ai-analyses')
-      .pipe(map((analyses) => this.sortByDateDesc(analyses)));
+      .pipe(
+        map((analyses) => this.sortByDateDesc(analyses)),
+        shareReplay(1)
+      );
+
+    this.analysisCache$.next(request$);
+    return request$;
   }
 
   createAnalysis(payload: CreateAiAnalysisPayload): Observable<AiAnalysisEntity> {
+    this.analysisCache$.next(null); // Invalidate cache
     return this.resourceApi.create<AiAnalysisEntity, CreateAiAnalysisPayload>('ai-analyses', payload);
   }
 
   deleteAnalysis(analysisId: string): Observable<void> {
+    this.analysisCache$.next(null); // Invalidate cache
     return this.resourceApi.remove('ai-analyses', analysisId);
+  }
+
+  // Invalidate all caches
+  invalidateAllCaches(): void {
+    this.audioCache$.next(null);
+    this.transcriptionCache$.next(null);
+    this.analysisCache$.next(null);
   }
 
   analyzeText(text: string): Observable<MindvoiceAnalyzeResponse> {

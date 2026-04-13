@@ -169,6 +169,9 @@ export class StateManagementService {
       return;
     }
 
+    // Invalidate all caches before fetching fresh data
+    this.audioWorkflow.invalidateAllCaches();
+
     this.loadingSubject.next(true);
     this.errorSubject.next(null);
 
