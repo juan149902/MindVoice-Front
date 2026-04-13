@@ -1,4 +1,5 @@
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, PLATFORM_ID } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import {
   BehaviorSubject,
   Observable,
@@ -55,6 +56,7 @@ export class StateManagementService {
   private readonly workflowEvents = inject(WorkflowEventsService);
   private readonly resourceApi = inject(ResourceApiService);
   private readonly tagsService = inject(TagsService);
+  private readonly platformId = inject(PLATFORM_ID);
   private readonly destroy$ = new Subject<void>();
 
   private readonly stateSubject = new BehaviorSubject<AppState>(initialState);
@@ -154,13 +156,19 @@ export class StateManagementService {
   }
 
   ensureInitialized(): void {
-    if (!this.initialized) {
+    // Only initialize in browser context, not during SSR
+    if (isPlatformBrowser(this.platformId) && !this.initialized) {
       this.initialized = true;
       this.refreshAllData();
     }
   }
 
   refreshAllData(): void {
+    // Skip refresh during SSR to avoid 401 errors
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
     this.loadingSubject.next(true);
     this.errorSubject.next(null);
 
