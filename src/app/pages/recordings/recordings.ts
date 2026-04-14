@@ -1,18 +1,21 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, OnInit } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, ElementRef, ViewChild, inject, OnInit } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { Router } from '@angular/router';
-import { BehaviorSubject, Observable, combineLatest } from 'rxjs';
+import { BehaviorSubject, Observable, catchError, combineLatest, firstValueFrom, of } from 'rxjs';
 import { map, startWith } from 'rxjs/operators';
 import {
+  AnalysisResult,
   AiAnalysisEntity,
   AudioEntity,
   AudioWorkflowService,
+  MindvoiceAnalyzeResponse,
   TranscriptionEntity,
 } from '../../core/services/audio-workflow.service';
-import { WorkflowEventsService } from '../../core/services/workflow-events.service';
 import { StateManagementService } from '../../core/services/state-management.service';
 import { AudioDownloaderService } from '../../core/services/audio-downloader.service';
+import { AnalysisArtifactsService } from '../../core/services/analysis-artifacts.service';
 
 interface RecordingRow {
   audio: AudioEntity;
@@ -26,15 +29,15 @@ interface RecordingRow {
   standalone: true,
   imports: [CommonModule, MatIconModule],
   template: `
-    <div class="p-8 max-w-[1250px] mx-auto w-full space-y-6">
-      <section class="flex flex-wrap items-center justify-between gap-3">
+    <div class="p-8 max-w-[1250px] mx-auto w-full space-y-6 premium-page-shell">
+      <section class="premium-page-hero rounded-2xl bg-gradient-to-br from-fuchsia-500/18 via-surface-dark/90 to-blue-900/18 border border-fuchsia-500/30 p-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 class="text-3xl font-black text-white">Grabaciones</h1>
-          <p class="text-gray-400">Repositorio de audios conectados a transcripciones, análisis y resúmenes IA.</p>
+          <p class="text-gray-300">Repositorio de audios conectados a transcripciones, análisis y resúmenes IA.</p>
         </div>
         <button
           type="button"
-          class="h-10 px-4 rounded-lg border border-border-dark text-sm font-semibold text-gray-300 hover:bg-border-dark/70 transition-colors"
+          class="h-10 px-4 rounded-lg bg-gradient-to-r from-fuchsia-600 to-blue-600 border border-fuchsia-400/40 text-sm font-semibold text-white hover:shadow-[0_0_20px_rgba(168,85,247,0.35)] transition-all"
           (click)="refreshData()"
           [disabled]="(loading$ | async)"
         >
@@ -46,10 +49,24 @@ interface RecordingRow {
       </section>
 
       @if (error$ | async) {
-        <section class="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-300">
+        <section class="rounded-xl border border-rose-500/30 bg-gradient-to-r from-rose-500/15 to-rose-500/8 p-4 text-sm text-rose-300 backdrop-blur-sm">
           {{ error$ | async }}
         </section>
       }
+
+      @if (manualSelectionMessage) {
+        <section class="rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/15 to-orange-500/8 p-4 text-sm text-amber-200 backdrop-blur-sm">
+          {{ manualSelectionMessage }}
+        </section>
+      }
+
+      <input
+        #manualAudioInput
+        type="file"
+        accept="audio/*"
+        class="hidden"
+        (change)="onManualAudioSelected($event)"
+      />
 
       <section class="rounded-xl border border-white/10 bg-surface-dark p-5 space-y-4">
         @let loading = (loading$ | async);
@@ -135,21 +152,24 @@ interface RecordingRow {
   `,
 })
 export class RecordingsComponent implements OnInit {
+  @ViewChild('manualAudioInput') manualAudioInput?: ElementRef<HTMLInputElement>;
+
   private readonly state = inject(StateManagementService);
   private readonly audioWorkflow = inject(AudioWorkflowService);
   private readonly audioDownloader = inject(AudioDownloaderService);
-  private readonly workflowEvents = inject(WorkflowEventsService);
+  private readonly analysisArtifacts = inject(AnalysisArtifactsService);
   private readonly router = inject(Router);
 
   private analyzingAudioIds$ = new BehaviorSubject<Set<string>>(new Set());
+  private pendingManualAnalysis: { audioId: string; suggestedFileName: string } | null = null;
 
   loading$ = this.state.loading$;
   error$ = this.state.error$;
   rows$!: Observable<RecordingRow[]>;
+  manualSelectionMessage = '';
 
   ngOnInit(): void {
-    // ✅ IMPORTANTE: Cargar datos ANTES de configurar observables
-    this.state.refreshAllData();
+    this.state.ensureInitialized();
 
     const combined$ = combineLatest([
       this.state.audios$,
@@ -173,9 +193,6 @@ export class RecordingsComponent implements OnInit {
       startWith([])
     );
 
-    // Recargar cuando haya cambios
-    this.workflowEvents.changed$
-      .subscribe(() => this.state.refreshAllData());
   }
 
   refreshData(): void {
@@ -186,64 +203,58 @@ export class RecordingsComponent implements OnInit {
     if (!audio._id || !audio.filePath) return;
 
     const audioId = audio._id;
-    const current = this.analyzingAudioIds$.value;
-    current.add(audioId);
-    this.analyzingAudioIds$.next(new Set(current));
+    this.setAnalyzingStatus(audioId, true);
+
+    if (this.requiresLocalFileSelection(audio.filePath)) {
+      const reused = await this.tryAnalyzeFromExistingTranscription(audioId);
+      if (reused) {
+        this.setAnalyzingStatus(audioId, false);
+        return;
+      }
+      this.requestManualAudioSelection(audioId, audio.filePath);
+      this.setAnalyzingStatus(audioId, false);
+      return;
+    }
 
     try {
-      // Download audio file as Blob
       const audioBlob = await this.audioDownloader.downloadAudioBlobPromise(audio.filePath);
       const fileName = audio.filePath.split('/').pop() || 'audio.wav';
-
-      // Send to backend's /mindvoice-api/analyze/audio endpoint
-      this.audioWorkflow.analyzeAudio(audioBlob, fileName).subscribe({
-        next: (aiResult) => {
-          const transcriptionText = this.audioWorkflow.extractTranscriptionText(aiResult);
-
-          this.state.createTranscription({
-            audioId,
-            text: transcriptionText,
-            timestamps: [],
-          }).subscribe({
-            next: (transcription) => {
-              this.state.createAnalysis({
-                transcriptionId: transcription._id || '',
-                result: {
-                  resumen: aiResult.executive_summary?.join('\n\n') || 'Análisis generado',
-                  temas: aiResult.tags || [],
-                  acciones: (aiResult.task_list || []).map(t => ({
-                    accion: t.task || '',
-                    prioridad: t.priority || 'media',
-                  })),
-                  sentimiento: aiResult.sentiment,
-                },
-              }).subscribe({
-                next: () => {
-                  const updated = this.analyzingAudioIds$.value;
-                  updated.delete(audioId);
-                  this.analyzingAudioIds$.next(new Set(updated));
-                },
-                error: () => {
-                  const updated = this.analyzingAudioIds$.value;
-                  updated.delete(audioId);
-                  this.analyzingAudioIds$.next(new Set(updated));
-                }
-              });
-            }
-          });
-        },
-        error: (err) => {
-          console.error('Error analyzing audio:', err);
-          const updated = this.analyzingAudioIds$.value;
-          updated.delete(audioId);
-          this.analyzingAudioIds$.next(new Set(updated));
-        }
-      });
+      this.manualSelectionMessage = '';
+      await this.processAudioAnalysis(audioId, audioBlob, fileName);
     } catch (error) {
-      console.error('Error downloading audio:', error);
-      const updated = this.analyzingAudioIds$.value;
-      updated.delete(audioId);
-      this.analyzingAudioIds$.next(new Set(updated));
+      if (this.isDownloadFailure(error)) {
+        const reused = await this.tryAnalyzeFromExistingTranscription(audioId);
+        if (!reused) {
+          this.requestManualAudioSelection(audioId, audio.filePath);
+        }
+      } else {
+        this.manualSelectionMessage = this.resolveAudioAnalyzeErrorMessage(error, false);
+      }
+    } finally {
+      this.setAnalyzingStatus(audioId, false);
+    }
+  }
+
+  async onManualAudioSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const selectedFile = input.files?.[0];
+    const pending = this.pendingManualAnalysis;
+    this.pendingManualAnalysis = null;
+
+    if (!pending || !selectedFile) {
+      this.manualSelectionMessage = '';
+      return;
+    }
+
+    this.setAnalyzingStatus(pending.audioId, true);
+    try {
+      this.manualSelectionMessage = '';
+      await this.processAudioAnalysis(pending.audioId, selectedFile, selectedFile.name || pending.suggestedFileName);
+    } catch (error) {
+      this.manualSelectionMessage = this.resolveAudioAnalyzeErrorMessage(error, true);
+    } finally {
+      this.setAnalyzingStatus(pending.audioId, false);
+      input.value = '';
     }
   }
 
@@ -267,5 +278,210 @@ export class RecordingsComponent implements OnInit {
 
   getAudioUrl(filePath: string): string {
     return this.audioDownloader.resolveAudioCandidates(filePath)[0] ?? this.audioDownloader.resolveAudioUrl(filePath);
+  }
+
+  private async processAudioAnalysis(audioId: string, audioBlob: Blob, fileName: string): Promise<void> {
+    const rawAiResult = await firstValueFrom(this.audioWorkflow.analyzeAudio(audioBlob, fileName));
+    const transcriptionText = this.audioWorkflow.extractTranscriptionText(rawAiResult) || `Transcripción automática de ${fileName}`;
+    const structuredPrompt = this.audioWorkflow.buildProfessionalAnalysisPrompt(transcriptionText);
+    const professionalAiResult = await firstValueFrom(
+      this.audioWorkflow.analyzeText(structuredPrompt).pipe(
+        catchError(() => of(rawAiResult)),
+      ),
+    );
+
+    const transcription = await firstValueFrom(this.state.createTranscription({
+      audioId,
+      text: transcriptionText,
+      timestamps: [],
+    }));
+
+    if (!transcription._id) {
+      throw new Error('No se pudo crear la transcripción para el audio.');
+    }
+
+    const analysis = await firstValueFrom(this.state.createAnalysis({
+      transcriptionId: transcription._id,
+      result: this.buildAnalysisResult(professionalAiResult, rawAiResult),
+    }));
+
+    await firstValueFrom(this.analysisArtifacts.createProfessionalArtifacts({
+      audioId,
+      audioFileName: fileName,
+      transcriptionId: transcription._id,
+      transcriptionText,
+      analysis,
+    }));
+
+    this.state.refreshAllData();
+  }
+
+  private buildAnalysisResult(aiResult: MindvoiceAnalyzeResponse, fallback: MindvoiceAnalyzeResponse): AnalysisResult {
+    const summary = aiResult.executive_summary?.join('\n\n')
+      || aiResult.report_ready_text
+      || fallback.executive_summary?.join('\n\n')
+      || fallback.report_ready_text
+      || 'Analisis generado';
+    const themes = (aiResult.tags && aiResult.tags.length > 0) ? aiResult.tags : (fallback.tags || []);
+    const tasks = (aiResult.task_list && aiResult.task_list.length > 0) ? aiResult.task_list : (fallback.task_list || []);
+    const sentiment = aiResult.sentiment || fallback.sentiment;
+
+    return {
+      resumen: summary,
+      temas: themes,
+      acciones: tasks.map((task) => ({
+        accion: task.task || '',
+        prioridad: task.priority || 'media',
+      })).filter((item) => item.accion.trim().length > 0),
+      sentimiento: sentiment,
+    };
+  }
+
+  private setAnalyzingStatus(audioId: string, isAnalyzing: boolean): void {
+    const current = new Set(this.analyzingAudioIds$.value);
+    if (isAnalyzing) {
+      current.add(audioId);
+    } else {
+      current.delete(audioId);
+    }
+    this.analyzingAudioIds$.next(current);
+  }
+
+  private requestManualAudioSelection(audioId: string, filePath: string): void {
+    this.pendingManualAnalysis = {
+      audioId,
+      suggestedFileName: filePath.split('/').pop() || 'audio.wav',
+    };
+    this.manualSelectionMessage = 'No se encontró el archivo en el servidor. Selecciona el audio local para analizarlo.';
+    const input = this.manualAudioInput?.nativeElement;
+    if (!input) {
+      return;
+    }
+    input.value = '';
+    input.click();
+  }
+
+  private requiresLocalFileSelection(filePath: string): boolean {
+    const trimmed = filePath.trim().toLowerCase();
+    if (!trimmed) {
+      return true;
+    }
+    return !trimmed.startsWith('http://')
+      && !trimmed.startsWith('https://')
+      && !trimmed.startsWith('/')
+      && !trimmed.startsWith('blob:')
+      && !trimmed.startsWith('data:');
+  }
+
+  private isDownloadFailure(error: unknown): boolean {
+    if (!(error instanceof HttpErrorResponse)) {
+      return false;
+    }
+    return error.status === 404 || error.status === 401 || error.status === 0;
+  }
+
+  private isTimeoutError(error: unknown): boolean {
+    return error instanceof Error && error.name === 'TimeoutError';
+  }
+
+  private isGeminiQuotaError(error: unknown): boolean {
+    if (error instanceof HttpErrorResponse && (error.status === 429 || error.status === 402)) {
+      return true;
+    }
+
+    const rawMessage = error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+
+    const message = rawMessage.toLowerCase();
+    return message.includes('gemini_quota_exceeded')
+      || message.includes('quota')
+      || message.includes('resource_exhausted')
+      || message.includes('rate limit')
+      || message.includes('billing')
+      || message.includes('insufficient credits')
+      || message.includes('payment required');
+  }
+
+  private resolveAudioAnalyzeErrorMessage(error: unknown, fromManualSelection: boolean): string {
+    if (this.isTimeoutError(error)) {
+      return 'El análisis tardó demasiado. El servidor de IA sigue procesando; vuelve a intentar en un momento.';
+    }
+
+    if (this.isMissingAiApiKeyError(error)) {
+      return 'Falta configurar la API key de IA. Define OPENROUTER_API_KEY (o GEMINI_API_KEY) para analizar audio.';
+    }
+
+    if (this.isInvalidOpenRouterApiKeyError(error)) {
+      return 'La API key de OpenRouter es inválida o no tiene permisos. Actualiza OPENROUTER_API_KEY o usa GEMINI_API_KEY.';
+    }
+
+    if (this.isGeminiQuotaError(error)) {
+      return 'Tu proveedor de IA no tiene cuota/crédito disponible. Activa facturación o usa otra API key.';
+    }
+
+    if (fromManualSelection) {
+      return 'No se pudo analizar el archivo seleccionado. Verifica el formato e intenta de nuevo.';
+    }
+
+    return 'No se pudo analizar este audio en este momento. Intenta de nuevo en unos segundos.';
+  }
+
+  private isMissingAiApiKeyError(error: unknown): boolean {
+    const rawMessage = error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+    return rawMessage.toLowerCase().includes('ai_api_key_missing');
+  }
+
+  private isInvalidOpenRouterApiKeyError(error: unknown): boolean {
+    const rawMessage = error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+    const message = rawMessage.toLowerCase();
+    return message.includes('openrouter_api_key_invalid')
+      || message.includes('openrouter error 401')
+      || message.includes('openrouter error 403')
+      || message.includes('unauthorized')
+      || message.includes('invalid api key')
+      || message.includes('invalid_api_key');
+  }
+
+  private async tryAnalyzeFromExistingTranscription(audioId: string): Promise<boolean> {
+    const transcriptions = await firstValueFrom(this.state.transcriptions$);
+    const analyses = await firstValueFrom(this.state.analyses$);
+
+    const candidates = (transcriptions || [])
+      .filter((item) => item.audioId === audioId && !!item._id && item.text.trim().length > 0)
+      .sort((a, b) => {
+        const first = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const second = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return second - first;
+      });
+
+    const latest = candidates[0];
+    if (!latest?._id) {
+      return false;
+    }
+
+    const alreadyAnalyzed = (analyses || []).some((analysis) => analysis.transcriptionId === latest._id);
+    if (alreadyAnalyzed) {
+      this.manualSelectionMessage = 'Ya existe un análisis IA para este audio. Se reutilizó directamente.';
+      return true;
+    }
+
+    await firstValueFrom(this.audioWorkflow.generateAndSaveAnalysis({
+      _id: latest._id,
+      text: latest.text,
+    }));
+    this.state.refreshAllData();
+    this.manualSelectionMessage = 'Se reutilizó la transcripción guardada para generar el análisis IA sin volver a subir audio.';
+    return true;
   }
 }

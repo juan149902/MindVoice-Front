@@ -9,8 +9,8 @@ import { AppLanguage, AppPreferencesService, AppTheme, ExportFormat } from '../.
   standalone: true,
   imports: [CommonModule, FormsModule, MatIconModule],
   template: `
-    <div class="max-w-[1100px] mx-auto w-full px-6 py-8 space-y-6">
-      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 p-6 shadow-[0_24px_60px_rgba(2,6,23,0.45)]">
+    <div class="max-w-[1100px] mx-auto w-full px-6 py-8 space-y-6 premium-page-shell">
+      <section class="premium-page-hero rounded-2xl border border-white/10 bg-gradient-to-br from-primary/20 via-surface-dark/90 to-indigo-900/20 p-6 shadow-[0_24px_60px_rgba(2,6,23,0.45)]">
         <div class="flex items-center gap-4">
           <div class="size-11 rounded-xl border border-primary/30 bg-primary/15 flex items-center justify-center text-primary">
             <mat-icon>settings</mat-icon>
@@ -23,7 +23,7 @@ import { AppLanguage, AppPreferencesService, AppTheme, ExportFormat } from '../.
       </section>
 
       <section class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4">
+        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4 hover:border-primary/30 hover:bg-surface-dark/90 transition-all">
           <h3 class="text-white font-bold flex items-center gap-2">
             <mat-icon class="text-primary">language</mat-icon>
             {{ t('settings.language') }}
@@ -38,7 +38,7 @@ import { AppLanguage, AppPreferencesService, AppTheme, ExportFormat } from '../.
           <p class="text-xs text-gray-500">Se aplica en toda la navegación y textos compatibles.</p>
         </article>
 
-        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4">
+        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4 hover:border-primary/30 hover:bg-surface-dark/90 transition-all">
           <h3 class="text-white font-bold flex items-center gap-2">
             <mat-icon class="text-primary">palette</mat-icon>
             {{ t('settings.theme') }}
@@ -67,7 +67,7 @@ import { AppLanguage, AppPreferencesService, AppTheme, ExportFormat } from '../.
           </div>
         </article>
 
-        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4">
+        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4 hover:border-primary/30 hover:bg-surface-dark/90 transition-all">
           <h3 class="text-white font-bold flex items-center gap-2">
             <mat-icon class="text-primary">description</mat-icon>
             {{ t('settings.export') }}
@@ -106,7 +106,7 @@ import { AppLanguage, AppPreferencesService, AppTheme, ExportFormat } from '../.
           </div>
         </article>
 
-        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4">
+        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4 hover:border-primary/30 hover:bg-surface-dark/90 transition-all">
           <div class="flex items-center justify-between rounded-xl border border-border-dark bg-background-dark/50 p-4">
             <div class="pr-3">
               <p class="text-sm font-semibold text-white">{{ t('settings.notifications') }}</p>

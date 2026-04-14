@@ -6,14 +6,11 @@ import {
   Subject,
   combineLatest,
   distinctUntilChanged,
+  finalize,
   map,
   shareReplay,
-  switchMap,
   tap,
   takeUntil,
-  filter,
-  startWith,
-  merge,
 } from 'rxjs';
 import { AudioEntity, TranscriptionEntity, AiAnalysisEntity, CreateAudioPayload, CreateTranscriptionPayload, CreateAiAnalysisPayload } from './audio-workflow.service';
 import { AudioWorkflowService } from './audio-workflow.service';
@@ -22,6 +19,7 @@ import { WorkflowEventsService } from './workflow-events.service';
 import { ResourceApiService } from './resource-api.service';
 import { TagsService, Tag } from './tags.service';
 import { ApiEntity } from '../models/api.models';
+import { TokenStorageService } from './token-storage.service';
 
 export interface AppState {
   audios: AudioEntity[];
@@ -56,6 +54,7 @@ export class StateManagementService {
   private readonly workflowEvents = inject(WorkflowEventsService);
   private readonly resourceApi = inject(ResourceApiService);
   private readonly tagsService = inject(TagsService);
+  private readonly tokenStorage = inject(TokenStorageService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly destroy$ = new Subject<void>();
 
@@ -149,15 +148,21 @@ export class StateManagementService {
     this.workflowEvents.changed$
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
-        if (this.initialized) {
+        if (this.initialized && this.tokenStorage.getToken()) {
           this.refreshAllData();
         }
       });
+
+    // Trigger initial load automatically for authenticated sessions
+    if (isPlatformBrowser(this.platformId) && this.tokenStorage.getToken()) {
+      this.initialized = true;
+      this.refreshAllData();
+    }
   }
 
   ensureInitialized(): void {
     // Only initialize in browser context, not during SSR
-    if (isPlatformBrowser(this.platformId) && !this.initialized) {
+    if (isPlatformBrowser(this.platformId) && !this.initialized && this.tokenStorage.getToken()) {
       this.initialized = true;
       this.refreshAllData();
     }
@@ -169,11 +174,25 @@ export class StateManagementService {
       return;
     }
 
+    // Skip refresh when user is not authenticated
+    if (!this.tokenStorage.getToken()) {
+      this.loadingSubject.next(false);
+      return;
+    }
+
     // Invalidate all caches before fetching fresh data
     this.audioWorkflow.invalidateAllCaches();
 
     this.loadingSubject.next(true);
     this.errorSubject.next(null);
+    let pendingRequests = 7;
+
+    const markCompleted = (): void => {
+      pendingRequests -= 1;
+      if (pendingRequests <= 0) {
+        this.loadingSubject.next(false);
+      }
+    };
 
     // Load all data in parallel with progressive updates
     // Each source emits independently so UI updates as data arrives
@@ -183,9 +202,14 @@ export class StateManagementService {
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, audios: audios || [] });
         }),
+        finalize(markCompleted),
         takeUntil(this.destroy$)
       )
-      .subscribe({ error: (err) => console.error('Error loading audios:', err) });
+      .subscribe({
+        error: (err) => {
+          console.error('Error loading audios:', err);
+        }
+      });
 
     this.audioWorkflow.listTranscriptions()
       .pipe(
@@ -193,9 +217,14 @@ export class StateManagementService {
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, transcriptions: transcriptions || [] });
         }),
+        finalize(markCompleted),
         takeUntil(this.destroy$)
       )
-      .subscribe({ error: (err) => console.error('Error loading transcriptions:', err) });
+      .subscribe({
+        error: (err) => {
+          console.error('Error loading transcriptions:', err);
+        }
+      });
 
     this.audioWorkflow.listAnalyses()
       .pipe(
@@ -203,9 +232,14 @@ export class StateManagementService {
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, analyses: analyses || [] });
         }),
+        finalize(markCompleted),
         takeUntil(this.destroy$)
       )
-      .subscribe({ error: (err) => console.error('Error loading analyses:', err) });
+      .subscribe({
+        error: (err) => {
+          console.error('Error loading analyses:', err);
+        }
+      });
 
     this.mindmapWorkflow.listWorkspaceItemsProgressive()
       .pipe(
@@ -213,9 +247,14 @@ export class StateManagementService {
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, mindmaps: mindmaps || [] });
         }),
+        finalize(markCompleted),
         takeUntil(this.destroy$)
       )
-      .subscribe({ error: (err) => console.error('Error loading mindmaps:', err) });
+      .subscribe({
+        error: (err) => {
+          console.error('Error loading mindmaps:', err);
+        }
+      });
 
     this.resourceApi.list('folders')
       .pipe(
@@ -223,9 +262,14 @@ export class StateManagementService {
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, folders: folders || [] });
         }),
+        finalize(markCompleted),
         takeUntil(this.destroy$)
       )
-      .subscribe({ error: (err) => console.error('Error loading folders:', err) });
+      .subscribe({
+        error: (err) => {
+          console.error('Error loading folders:', err);
+        }
+      });
 
     this.resourceApi.list('documents')
       .pipe(
@@ -233,9 +277,14 @@ export class StateManagementService {
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, documents: documents || [] });
         }),
+        finalize(markCompleted),
         takeUntil(this.destroy$)
       )
-      .subscribe({ error: (err) => console.error('Error loading documents:', err) });
+      .subscribe({
+        error: (err) => {
+          console.error('Error loading documents:', err);
+        }
+      });
 
     this.tagsService.loadTags()
       .pipe(
@@ -245,12 +294,16 @@ export class StateManagementService {
             ...currentState, 
             tags: tags || [],
             lastUpdated: new Date(),
-            loading: false,
           });
         }),
+        finalize(markCompleted),
         takeUntil(this.destroy$)
       )
-      .subscribe({ error: (err) => console.error('Error loading tags:', err) });
+      .subscribe({
+        error: (err) => {
+          console.error('Error loading tags:', err);
+        }
+      });
   }
 
   // Audio actions

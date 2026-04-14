@@ -305,6 +305,13 @@ export class MindmapWorkflowService {
     );
   }
 
+  deleteMindmap(mindmapId: string): Observable<void> {
+    if (!mindmapId?.trim()) {
+      return throwError(() => new Error('El ID del mapa mental es obligatorio para eliminar.'));
+    }
+    return this.resourceApi.remove('mindmaps', mindmapId);
+  }
+
   parseCanvasPayload(raw: unknown): MindmapCanvasPayload {
     if (!raw || typeof raw !== 'object') {
       return { nodes: [], edges: [] };
@@ -430,8 +437,16 @@ export class MindmapWorkflowService {
     }
 
     const source = value as Record<string, unknown>;
-    const from = this.safeString(source['from']);
-    const to = this.safeString(source['to']);
+    const from = this.safeString(source['from'])
+      || this.safeString(source['source'])
+      || this.safeString(source['fromId'])
+      || this.safeString(source['sourceId'])
+      || this.safeString(source['fromNodeId']);
+    const to = this.safeString(source['to'])
+      || this.safeString(source['target'])
+      || this.safeString(source['toId'])
+      || this.safeString(source['targetId'])
+      || this.safeString(source['toNodeId']);
     if (!from || !to) {
       return null;
     }

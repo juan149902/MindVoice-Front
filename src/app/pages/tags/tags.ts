@@ -35,9 +35,9 @@ type SortMode = 'newest' | 'oldest' | 'name';
   imports: [CommonModule, FormsModule, MatIconModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="p-8 max-w-[1200px] mx-auto w-full space-y-6">
+    <div class="p-8 max-w-[1200px] mx-auto w-full space-y-6 premium-page-shell">
       <!-- Header y formulario de creación -->
-      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 p-6 shadow-2xl">
+      <section class="premium-page-hero rounded-2xl border border-white/10 bg-gradient-to-br from-cyan-500/16 via-surface-dark/88 to-violet-900/16 p-6 shadow-2xl">
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 class="text-3xl font-black text-white tracking-tight">Mis Etiquetas</h1>

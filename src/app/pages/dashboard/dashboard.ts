@@ -1,29 +1,16 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, OnInit, PLATFORM_ID, inject, AfterViewInit, ViewChild, ElementRef, OnDestroy } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
-import { Observable, Subject, takeUntil, map, combineLatest, debounceTime } from 'rxjs';
+import { Observable, Subject, takeUntil, map } from 'rxjs';
 import {
   AiAnalysisEntity,
   TranscriptionEntity,
 } from '../../core/services/audio-workflow.service';
-import { ResourceApiService } from '../../core/services/resource-api.service';
 import { TokenStorageService } from '../../core/services/token-storage.service';
 import { StateManagementService } from '../../core/services/state-management.service';
 import { Chart, registerables } from 'chart.js';
 
 Chart.register(...registerables);
-
-interface FolderEntity {
-  _id?: string;
-}
-
-interface DocumentEntity {
-  _id?: string;
-}
-
-interface TagEntity {
-  _id?: string;
-}
 
 interface DashboardMetrics {
   audios: number;
@@ -51,6 +38,17 @@ interface StatCard {
   progressFrom: string;
   progressTo: string;
   dotColor: string;
+}
+
+interface DashboardChartTheme {
+  legendColor: string;
+  axisColor: string;
+  axisStrongColor: string;
+  gridColor: string;
+  tooltipBackground: string;
+  tooltipTitle: string;
+  tooltipBody: string;
+  tooltipBorder: string;
 }
 
 const STAT_CARDS: StatCard[] = [
@@ -169,12 +167,12 @@ const STAT_CARDS: StatCard[] = [
   standalone: true,
   imports: [CommonModule, MatIconModule],
   template: `
-    <div class="min-h-screen w-full p-6 md:p-8 max-w-[1600px] mx-auto space-y-6">
+    <div class="dashboard-shell min-h-screen w-full p-6 md:p-8 max-w-[1600px] mx-auto space-y-6 premium-page-shell">
       <!-- Header Section -->
-      <section class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-r from-violet-900/40 via-slate-900/40 to-cyan-900/40 p-6 md:p-8">
-        <div class="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgNDBMMDQwIDBIMFY0MHoiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-50"></div>
-        <div class="absolute top-0 right-0 w-96 h-96 bg-violet-500/10 rounded-full blur-3xl"></div>
-        <div class="absolute bottom-0 left-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl"></div>
+      <section class="dashboard-hero premium-page-hero relative overflow-hidden rounded-2xl border border-white/10 p-6 md:p-8">
+        <div class="dashboard-hero-grid absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTTAgNDBMMDQwIDBIMFY0MHoiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')]"></div>
+        <div class="dashboard-hero-glow-primary absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl"></div>
+        <div class="dashboard-hero-glow-secondary absolute bottom-0 left-0 w-96 h-96 rounded-full blur-3xl"></div>
 
         <div class="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div class="space-y-2">
@@ -183,13 +181,13 @@ const STAT_CARDS: StatCard[] = [
                 <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-violet-500/30">
                   <mat-icon class="text-white text-2xl">dashboard</mat-icon>
                 </div>
-                <div class="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-pulse border-2 border-slate-900"></div>
+                <div class="dashboard-status-dot absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-pulse border-2"></div>
               </div>
               <div>
                 <h2 class="text-3xl md:text-4xl font-black text-white tracking-tight">
                   <span class="bg-gradient-to-r from-violet-400 via-cyan-400 to-emerald-400 bg-clip-text text-transparent">Hola, {{ username }}</span>
                 </h2>
-                <p class="text-gray-400 text-sm md:text-base flex items-center gap-2">
+                <p class="dashboard-subtitle text-sm md:text-base flex items-center gap-2">
                   <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
                   Panel operativo conectado en tiempo real
                 </p>
@@ -197,24 +195,24 @@ const STAT_CARDS: StatCard[] = [
             </div>
           </div>
 
-          <button
-            type="button"
-            class="group relative h-12 px-6 rounded-xl border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 transition-all duration-300 cursor-pointer overflow-hidden"
-            (click)="refreshData()"
-            [disabled]="(loading$ | async)"
-          >
-            <div class="absolute inset-0 bg-gradient-to-r from-violet-500/0 via-violet-500/10 to-violet-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-            <span class="relative inline-flex items-center gap-2 text-sm font-semibold text-violet-300 group-hover:text-violet-200">
-              <mat-icon class="text-lg transition-transform duration-500" [class.animate-spin]="(loading$ | async)">refresh</mat-icon>
-              {{ (loading$ | async) ? 'Actualizando...' : 'Actualizar' }}
-            </span>
-          </button>
-        </div>
+            <button
+              type="button"
+              class="dashboard-refresh-btn group relative h-12 px-6 rounded-xl border transition-all duration-300 cursor-pointer overflow-hidden"
+              (click)="refreshData()"
+              [disabled]="(loading$ | async)"
+            >
+              <div class="absolute inset-0 bg-gradient-to-r from-violet-500/0 via-violet-500/10 to-violet-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+              <span class="dashboard-refresh-btn-label relative inline-flex items-center gap-2 text-sm font-semibold">
+                <mat-icon class="text-lg transition-transform duration-500" [class.animate-spin]="(loading$ | async)">refresh</mat-icon>
+                {{ (loading$ | async) ? 'Actualizando...' : 'Actualizar' }}
+              </span>
+            </button>
+          </div>
       </section>
 
       <!-- Error Message -->
       @if (error$ | async) {
-        <section class="relative overflow-hidden rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300 animate-pulse">
+        <section class="dashboard-error-card relative overflow-hidden rounded-xl border p-4 text-sm animate-pulse">
           <div class="absolute inset-y-0 left-0 w-1 bg-rose-500"></div>
           <div class="flex items-center gap-3">
             <mat-icon class="text-lg">error_outline</mat-icon>
@@ -227,7 +225,7 @@ const STAT_CARDS: StatCard[] = [
       <section class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         @for (card of statCards; track card.key; let i = $index) {
           <article
-            class="group relative rounded-2xl border border-white/10 bg-slate-900/50 p-5 overflow-hidden transition-all duration-500 hover:scale-105 hover:-translate-y-1"
+            class="dashboard-stat-card group relative rounded-2xl p-5 overflow-hidden transition-all duration-500 hover:scale-[1.02] hover:-translate-y-1"
             [class]="card.borderColor"
             [style.animationDelay]="i * 100 + 'ms'"
           >
@@ -267,7 +265,7 @@ const STAT_CARDS: StatCard[] = [
               </div>
 
               <!-- Progress bar -->
-              <div class="mt-3 h-1 rounded-full bg-white/5 overflow-hidden">
+              <div class="dashboard-progress-track mt-3 h-1 rounded-full overflow-hidden">
                 <div
                   class="h-full rounded-full transition-all duration-1000 ease-out bg-gradient-to-r"
                   [class]="card.progressFrom + ' ' + card.progressTo"
@@ -282,7 +280,7 @@ const STAT_CARDS: StatCard[] = [
       <!-- Charts Section -->
       <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <!-- Doughnut Chart -->
-        <article class="relative rounded-2xl border border-white/10 bg-slate-900/50 p-6 overflow-hidden">
+        <article class="dashboard-panel relative rounded-2xl border p-6 overflow-hidden">
           <div class="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent"></div>
           <div class="relative">
             <div class="flex items-center justify-between mb-6">
@@ -291,10 +289,10 @@ const STAT_CARDS: StatCard[] = [
                 Distribución de Contenido
               </h3>
               <div class="flex items-center gap-2 text-xs text-gray-400">
-                <span class="px-2 py-1 rounded-full bg-white/5 border border-white/10">Total: {{ getTotalMetrics() }}</span>
+                <span class="dashboard-chip px-2 py-1 rounded-full border">Total: {{ getTotalMetrics() }}</span>
               </div>
             </div>
-            <div class="relative h-[280px]">
+            <div class="relative h-[320px] md:h-[340px] flex items-center justify-center">
             @if (loading && !chartsInitialized) {
               <div class="absolute inset-0 flex items-center justify-center">
                 <div class="relative">
@@ -305,13 +303,15 @@ const STAT_CARDS: StatCard[] = [
                 </div>
               </div>
             }
-              <canvas #doughnutChart></canvas>
+              <div class="chart-canvas-shell chart-canvas-shell--doughnut">
+                <canvas #doughnutChart class="chart-canvas"></canvas>
+              </div>
             </div>
           </div>
         </article>
 
         <!-- Bar Chart -->
-        <article class="relative rounded-2xl border border-white/10 bg-slate-900/50 p-6 overflow-hidden">
+        <article class="dashboard-panel relative rounded-2xl border p-6 overflow-hidden">
           <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent"></div>
           <div class="relative">
             <div class="flex items-center justify-between mb-6">
@@ -320,7 +320,7 @@ const STAT_CARDS: StatCard[] = [
                 Resumen de Métricas
               </h3>
             </div>
-            <div class="relative h-[280px]">
+            <div class="relative h-[320px] md:h-[340px] flex items-center justify-center">
               @if (loading && !chartsInitialized) {
                 <div class="absolute inset-0 flex items-center justify-center">
                   <div class="relative">
@@ -331,7 +331,9 @@ const STAT_CARDS: StatCard[] = [
                   </div>
                 </div>
               }
-              <canvas #barChart></canvas>
+              <div class="chart-canvas-shell chart-canvas-shell--bar">
+                <canvas #barChart class="chart-canvas"></canvas>
+              </div>
             </div>
           </div>
         </article>
@@ -340,7 +342,7 @@ const STAT_CARDS: StatCard[] = [
       <!-- Recent Items Section -->
       <section class="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <!-- Recent Transcriptions -->
-        <article class="relative rounded-2xl border border-white/10 bg-slate-900/50 p-6 overflow-hidden">
+        <article class="dashboard-panel relative rounded-2xl border p-6 overflow-hidden">
           <div class="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-transparent"></div>
           <div class="relative">
             <div class="flex items-center justify-between mb-4">
@@ -348,7 +350,7 @@ const STAT_CARDS: StatCard[] = [
                 <span class="w-1 h-6 rounded-full bg-gradient-to-b from-cyan-500 to-blue-500"></span>
                 Transcripciones Recientes
               </h3>
-              <span class="text-xs text-gray-400 bg-white/5 px-2 py-1 rounded-full border border-white/10">
+              <span class="dashboard-chip text-xs px-2 py-1 rounded-full border">
                 Últimas 5
               </span>
             </div>
@@ -375,7 +377,7 @@ const STAT_CARDS: StatCard[] = [
               <div class="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
                 @for (transcription of (recentTranscriptions$ | async); track transcription._id || $index; let last = $last) {
                   <div
-                    class="group rounded-xl border border-white/5 bg-white/5 p-4 hover:bg-white/10 hover:border-cyan-500/30 transition-all duration-300 cursor-pointer"
+                    class="dashboard-list-item group rounded-xl border p-4 transition-all duration-300 cursor-pointer"
                     [class.border-b-white/10]="!last"
                   >
                     <div class="flex items-start gap-3">
@@ -400,7 +402,7 @@ const STAT_CARDS: StatCard[] = [
         </article>
 
         <!-- Recent Analyses -->
-        <article class="relative rounded-2xl border border-white/10 bg-slate-900/50 p-6 overflow-hidden">
+        <article class="dashboard-panel relative rounded-2xl border p-6 overflow-hidden">
           <div class="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent"></div>
           <div class="relative">
             <div class="flex items-center justify-between mb-4">
@@ -408,7 +410,7 @@ const STAT_CARDS: StatCard[] = [
                 <span class="w-1 h-6 rounded-full bg-gradient-to-b from-amber-500 to-orange-500"></span>
                 Análisis IA Recientes
               </h3>
-              <span class="text-xs text-gray-400 bg-white/5 px-2 py-1 rounded-full border border-white/10">
+              <span class="dashboard-chip text-xs px-2 py-1 rounded-full border">
                 Últimos 5
               </span>
             </div>
@@ -435,7 +437,7 @@ const STAT_CARDS: StatCard[] = [
               <div class="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
                 @for (analysis of (recentAnalyses$ | async); track analysis._id || $index; let last = $last) {
                   <div
-                    class="group rounded-xl border border-white/5 bg-white/5 p-4 hover:bg-white/10 hover:border-amber-500/30 transition-all duration-300 cursor-pointer"
+                    class="dashboard-list-item group rounded-xl border p-4 transition-all duration-300 cursor-pointer"
                     [class.border-b-white/10]="!last"
                   >
                     <div class="flex items-start gap-3">
@@ -445,7 +447,7 @@ const STAT_CARDS: StatCard[] = [
                       <div class="flex-1 min-w-0">
                         <p class="text-sm text-gray-300 line-clamp-2 leading-relaxed">{{ analysis.result.resumen }}</p>
                         <div class="flex items-center gap-3 mt-2 flex-wrap">
-                          @if (analysis.result.acciones?.length) {
+                          @if (analysis.result.acciones.length) {
                             <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                               <mat-icon class="text-xs">task_alt</mat-icon>
                               {{ analysis.result.acciones.length }} acciones
@@ -472,10 +474,10 @@ const STAT_CARDS: StatCard[] = [
       </section>
 
       <!-- Trend Line Chart -->
-      <section class="relative rounded-2xl border border-white/10 bg-slate-900/50 p-6 overflow-hidden">
+      <section class="dashboard-panel relative rounded-2xl border p-6 overflow-hidden">
         <div class="absolute inset-0 bg-gradient-to-br from-rose-500/5 to-purple-500/5"></div>
         <div class="relative">
-          <div class="flex items-center justify-between mb-6">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
             <h3 class="text-lg font-bold text-white flex items-center gap-2">
               <span class="w-1 h-6 rounded-full bg-gradient-to-b from-rose-500 to-purple-500"></span>
               Tendencias de Contenido
@@ -492,7 +494,7 @@ const STAT_CARDS: StatCard[] = [
               </span>
             </div>
           </div>
-          <div class="relative h-[250px]">
+          <div class="relative h-[300px] md:h-[320px] flex items-center justify-center">
             @if (loading && !chartsInitialized) {
               <div class="absolute inset-0 flex items-center justify-center">
                 <div class="relative">
@@ -501,31 +503,182 @@ const STAT_CARDS: StatCard[] = [
                 </div>
               </div>
             }
-            <canvas #lineChart></canvas>
+            <div class="chart-canvas-shell chart-canvas-shell--line">
+              <canvas #lineChart class="chart-canvas"></canvas>
+            </div>
           </div>
         </div>
       </section>
     </div>
   `,
   styles: [`
+    :host {
+      --dashboard-panel-bg: linear-gradient(145deg, rgba(34, 21, 57, 0.78), rgba(18, 11, 33, 0.88));
+      --dashboard-panel-border: rgba(167, 139, 250, 0.24);
+      --dashboard-panel-shadow: 0 20px 42px rgba(12, 8, 22, 0.3);
+      --dashboard-hero-bg: linear-gradient(125deg, rgba(76, 29, 149, 0.46), rgba(23, 14, 40, 0.84), rgba(14, 116, 144, 0.36));
+      --dashboard-muted-text: #a1a1aa;
+      --dashboard-chip-bg: rgba(255, 255, 255, 0.06);
+      --dashboard-chip-border: rgba(255, 255, 255, 0.14);
+      --dashboard-chip-text: #cbd5e1;
+      --dashboard-list-bg: rgba(255, 255, 255, 0.05);
+      --dashboard-list-border: rgba(255, 255, 255, 0.08);
+      --dashboard-list-hover-bg: rgba(255, 255, 255, 0.1);
+      --dashboard-list-hover-border: rgba(139, 92, 246, 0.36);
+      --dashboard-progress-track: rgba(255, 255, 255, 0.08);
+      --dashboard-refresh-bg: rgba(124, 58, 237, 0.14);
+      --dashboard-refresh-border: rgba(167, 139, 250, 0.42);
+      --dashboard-refresh-text: #c4b5fd;
+      --dashboard-error-bg: rgba(244, 63, 94, 0.14);
+      --dashboard-error-border: rgba(251, 113, 133, 0.38);
+      --dashboard-error-text: #fecdd3;
+      --dashboard-grid-opacity: 0.46;
+      --dashboard-scroll-track: rgba(255, 255, 255, 0.05);
+      --dashboard-scroll-thumb: rgba(255, 255, 255, 0.2);
+      --dashboard-scroll-thumb-hover: rgba(255, 255, 255, 0.3);
+    }
+
+    :host-context(.theme-light) {
+      --dashboard-panel-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(245, 241, 255, 0.94));
+      --dashboard-panel-border: rgba(167, 139, 250, 0.22);
+      --dashboard-panel-shadow: 0 18px 36px rgba(76, 29, 149, 0.12);
+      --dashboard-hero-bg: linear-gradient(125deg, rgba(255, 255, 255, 0.98), rgba(246, 242, 255, 0.96), rgba(238, 248, 255, 0.94));
+      --dashboard-muted-text: #64748b;
+      --dashboard-chip-bg: rgba(124, 58, 237, 0.08);
+      --dashboard-chip-border: rgba(124, 58, 237, 0.22);
+      --dashboard-chip-text: #5b21b6;
+      --dashboard-list-bg: rgba(124, 58, 237, 0.05);
+      --dashboard-list-border: rgba(167, 139, 250, 0.2);
+      --dashboard-list-hover-bg: rgba(124, 58, 237, 0.1);
+      --dashboard-list-hover-border: rgba(124, 58, 237, 0.32);
+      --dashboard-progress-track: rgba(124, 58, 237, 0.14);
+      --dashboard-refresh-bg: rgba(124, 58, 237, 0.1);
+      --dashboard-refresh-border: rgba(124, 58, 237, 0.3);
+      --dashboard-refresh-text: #5b21b6;
+      --dashboard-error-bg: rgba(244, 63, 94, 0.08);
+      --dashboard-error-border: rgba(244, 63, 94, 0.24);
+      --dashboard-error-text: #9f1239;
+      --dashboard-grid-opacity: 0.18;
+      --dashboard-scroll-track: rgba(124, 58, 237, 0.05);
+      --dashboard-scroll-thumb: rgba(124, 58, 237, 0.28);
+      --dashboard-scroll-thumb-hover: rgba(124, 58, 237, 0.42);
+    }
+
+    .dashboard-hero {
+      background: var(--dashboard-hero-bg) !important;
+      border-color: var(--dashboard-panel-border) !important;
+      box-shadow: var(--dashboard-panel-shadow);
+    }
+
+    .dashboard-hero-grid {
+      opacity: var(--dashboard-grid-opacity);
+    }
+
+    .dashboard-hero-glow-primary {
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.18), transparent 68%);
+    }
+
+    .dashboard-hero-glow-secondary {
+      background: radial-gradient(circle, rgba(34, 211, 238, 0.15), transparent 68%);
+    }
+
+    :host-context(.theme-light) .dashboard-hero-glow-primary {
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.12), transparent 68%);
+    }
+
+    :host-context(.theme-light) .dashboard-hero-glow-secondary {
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.09), transparent 68%);
+    }
+
+    .dashboard-status-dot {
+      border-color: rgba(15, 23, 42, 0.8);
+    }
+
+    :host-context(.theme-light) .dashboard-status-dot {
+      border-color: rgba(255, 255, 255, 0.96);
+    }
+
+    .dashboard-subtitle {
+      color: var(--dashboard-muted-text);
+    }
+
+    .dashboard-panel,
+    .dashboard-stat-card {
+      background: var(--dashboard-panel-bg);
+      border-color: var(--dashboard-panel-border) !important;
+      box-shadow: var(--dashboard-panel-shadow);
+    }
+
+    .dashboard-stat-card {
+      min-height: 150px;
+    }
+
+    .dashboard-refresh-btn {
+      background: var(--dashboard-refresh-bg);
+      border-color: var(--dashboard-refresh-border);
+    }
+
+    .dashboard-refresh-btn:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.08);
+    }
+
+    .dashboard-refresh-btn-label {
+      color: var(--dashboard-refresh-text);
+    }
+
+    .dashboard-error-card {
+      background: var(--dashboard-error-bg);
+      border-color: var(--dashboard-error-border);
+      color: var(--dashboard-error-text);
+    }
+
+    .dashboard-chip {
+      background: var(--dashboard-chip-bg);
+      border-color: var(--dashboard-chip-border);
+      color: var(--dashboard-chip-text);
+    }
+
+    .dashboard-list-item {
+      background: var(--dashboard-list-bg);
+      border-color: var(--dashboard-list-border);
+    }
+
+    .dashboard-list-item:hover {
+      background: var(--dashboard-list-hover-bg);
+      border-color: var(--dashboard-list-hover-border);
+    }
+
+    .dashboard-progress-track {
+      background: var(--dashboard-progress-track);
+    }
+
+    :host-context(.theme-light) .dashboard-list-item p.text-gray-300 {
+      color: #334155 !important;
+    }
+
+    :host-context(.theme-light) .dashboard-list-item .text-gray-500 {
+      color: #64748b !important;
+    }
+
     .custom-scrollbar {
       scrollbar-width: thin;
-      scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+      scrollbar-color: var(--dashboard-scroll-thumb) var(--dashboard-scroll-track);
     }
     .custom-scrollbar::-webkit-scrollbar {
       width: 6px;
     }
     .custom-scrollbar::-webkit-scrollbar-track {
-      background: rgba(255, 255, 255, 0.05);
+      background: var(--dashboard-scroll-track);
       border-radius: 3px;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.2);
+      background: var(--dashboard-scroll-thumb);
       border-radius: 3px;
       transition: background 0.3s;
     }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.3);
+      background: var(--dashboard-scroll-thumb-hover);
     }
 
     @keyframes fadeInUp {
@@ -542,6 +695,31 @@ const STAT_CARDS: StatCard[] = [
     article {
       animation: fadeInUp 0.5s ease-out forwards;
     }
+
+    .chart-canvas-shell {
+      width: 100%;
+      height: 100%;
+      margin: 0 auto;
+    }
+
+    .chart-canvas-shell--doughnut {
+      max-width: 520px;
+    }
+
+    .chart-canvas-shell--bar {
+      max-width: 700px;
+    }
+
+    .chart-canvas-shell--line {
+      max-width: 1080px;
+    }
+
+    .chart-canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+      margin: 0 auto;
+    }
   `]
 })
 export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
@@ -550,7 +728,6 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('lineChart') lineChartRef!: ElementRef<HTMLCanvasElement>;
 
   private readonly state = inject(StateManagementService);
-  private readonly resourceApi = inject(ResourceApiService);
   private readonly tokenStorage = inject(TokenStorageService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly destroy$ = new Subject<void>();
@@ -564,9 +741,11 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   error$ = this.state.error$;
   
   loading = false;
-  private loadingFolders = false;
-  private loadingDocuments = false;
-  private loadingTags = false;
+  private counterAnimationTimer: ReturnType<typeof setInterval> | null = null;
+  private chartRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+  private themeObserver: MutationObserver | null = null;
+  private readonly autoRefreshMs = 12000;
 
   metrics: DashboardMetrics = {
     audios: 0,
@@ -586,12 +765,12 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     tags: 0,
   };
 
-  recentTranscriptions$: Observable<TranscriptionEntity[]> = this.state.transcriptions$.pipe(
-    map((trans) => trans.slice(0, 5))
+  recentTranscriptions$: Observable<TranscriptionEntity[]> = this.state.state$.pipe(
+    map((state) => state.transcriptions.slice(0, 5))
   );
   
-  recentAnalyses$: Observable<AiAnalysisEntity[]> = this.state.analyses$.pipe(
-    map((analyses) => analyses.slice(0, 5))
+  recentAnalyses$: Observable<AiAnalysisEntity[]> = this.state.state$.pipe(
+    map((state) => state.analyses.slice(0, 5))
   );
 
   chartsInitialized = false;
@@ -607,6 +786,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Ensure state is initialized once
     this.state.ensureInitialized();
+    this.state.refreshAllData();
+    this.startAutoRefresh();
+    this.attachWindowRefreshTriggers();
+    this.attachThemeObserver();
 
     this.state.loading$
       .pipe(takeUntil(this.destroy$))
@@ -614,105 +797,172 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
         this.loading = isLoading;
       });
 
-    combineLatest([
-      this.state.audios$,
-      this.state.transcriptions$,
-      this.state.analyses$,
-    ])
+    this.state.state$
       .pipe(
-        debounceTime(300),
         takeUntil(this.destroy$)
       )
-      .subscribe(([audios, transcriptions, analyses]) => {
-        this.metrics = { ...this.metrics, audios: audios.length, transcriptions: transcriptions.length, analyses: analyses.length };
+      .subscribe((state) => {
+        this.metrics = {
+          audios: state.audios.length,
+          transcriptions: state.transcriptions.length,
+          analyses: state.analyses.length,
+          folders: state.folders.length,
+          documents: state.documents.length,
+          tags: state.tags.length,
+        };
         this.animateCounters(this.metrics);
         this.refreshCharts();
       });
-
-    this.loadFoldersDocumentsAndTags();
   }
 
   ngAfterViewInit(): void {
     if (isPlatformBrowser(this.platformId)) {
-      // Charts will be initialized on demand when data loads
+      this.refreshCharts();
     }
   }
 
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    this.stopAutoRefresh();
+    this.detachWindowRefreshTriggers();
+    this.detachThemeObserver();
+    if (this.counterAnimationTimer) {
+      clearInterval(this.counterAnimationTimer);
+      this.counterAnimationTimer = null;
+    }
+    if (this.chartRefreshTimer) {
+      clearTimeout(this.chartRefreshTimer);
+      this.chartRefreshTimer = null;
+    }
     this.destroyCharts();
   }
 
   refreshData(): void {
     this.state.refreshAllData();
-    this.loadFoldersDocumentsAndTags();
   }
 
-  private loadFoldersDocumentsAndTags(): void {
-    this.loadingFolders = true;
-    this.loadingDocuments = true;
-    this.loadingTags = true;
-    this.refreshLoadingState();
+  private startAutoRefresh(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
 
-    this.resourceApi.list<any>('folders')
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (folders) => {
-          this.metrics = { ...this.metrics, folders: folders.length };
-          this.animateCounters(this.metrics);
-          this.refreshCharts();
-          this.loadingFolders = false;
-          this.refreshLoadingState();
-        },
-        error: () => {
-          this.loadingFolders = false;
-          this.refreshLoadingState();
-        },
-      });
+    if (this.autoRefreshTimer) {
+      clearInterval(this.autoRefreshTimer);
+      this.autoRefreshTimer = null;
+    }
 
-    this.resourceApi.list<any>('documents')
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (documents) => {
-          this.metrics = { ...this.metrics, documents: documents.length };
-          this.animateCounters(this.metrics);
-          this.refreshCharts();
-          this.loadingDocuments = false;
-          this.refreshLoadingState();
-        },
-        error: () => {
-          this.loadingDocuments = false;
-          this.refreshLoadingState();
-        },
-      });
+    this.autoRefreshTimer = setInterval(() => {
+      if (document.visibilityState !== 'visible' || this.loading) {
+        return;
+      }
+      this.state.refreshAllData();
+    }, this.autoRefreshMs);
+  }
 
-    this.resourceApi.list<any>('tags')
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: (tags) => {
-          this.metrics = { ...this.metrics, tags: tags.length };
-          this.animateCounters(this.metrics);
-          this.refreshCharts();
-          this.loadingTags = false;
-          this.refreshLoadingState();
-        },
-        error: () => {
-          this.loadingTags = false;
-          this.refreshLoadingState();
-        },
-      });
+  private stopAutoRefresh(): void {
+    if (this.autoRefreshTimer) {
+      clearInterval(this.autoRefreshTimer);
+      this.autoRefreshTimer = null;
+    }
+  }
+
+  private readonly handleWindowFocus = (): void => {
+    this.state.refreshAllData();
+  };
+
+  private readonly handleVisibilityChange = (): void => {
+    if (document.visibilityState === 'visible') {
+      this.state.refreshAllData();
+    }
+  };
+
+  private attachWindowRefreshTriggers(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+    window.addEventListener('focus', this.handleWindowFocus);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
+  }
+
+  private detachWindowRefreshTriggers(): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+    window.removeEventListener('focus', this.handleWindowFocus);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+  }
+
+  private attachThemeObserver(): void {
+    if (!isPlatformBrowser(this.platformId) || typeof MutationObserver === 'undefined') {
+      return;
+    }
+
+    if (this.themeObserver) {
+      this.themeObserver.disconnect();
+      this.themeObserver = null;
+    }
+
+    this.themeObserver = new MutationObserver(() => {
+      this.destroyCharts();
+      this.refreshCharts();
+    });
+
+    this.themeObserver.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['class']
+    });
+  }
+
+  private detachThemeObserver(): void {
+    if (this.themeObserver) {
+      this.themeObserver.disconnect();
+      this.themeObserver = null;
+    }
+  }
+
+  private getChartTheme(): DashboardChartTheme {
+    const isLight = isPlatformBrowser(this.platformId) && document.body.classList.contains('theme-light');
+
+    if (isLight) {
+      return {
+        legendColor: 'rgba(51, 65, 85, 0.88)',
+        axisColor: 'rgba(71, 85, 105, 0.86)',
+        axisStrongColor: 'rgba(30, 41, 59, 0.94)',
+        gridColor: 'rgba(124, 58, 237, 0.12)',
+        tooltipBackground: 'rgba(255, 255, 255, 0.96)',
+        tooltipTitle: '#4c1d95',
+        tooltipBody: '#1f2937',
+        tooltipBorder: 'rgba(124, 58, 237, 0.24)'
+      };
+    }
+
+    return {
+      legendColor: 'rgba(248, 250, 252, 0.84)',
+      axisColor: 'rgba(226, 232, 240, 0.72)',
+      axisStrongColor: 'rgba(248, 250, 252, 0.88)',
+      gridColor: 'rgba(255, 255, 255, 0.06)',
+      tooltipBackground: 'rgba(2, 6, 23, 0.92)',
+      tooltipTitle: '#ffffff',
+      tooltipBody: '#ffffff',
+      tooltipBorder: 'rgba(167, 139, 250, 0.26)'
+    };
   }
 
   private animateCounters(newMetrics: DashboardMetrics): void {
-    const duration = 1000;
-    const steps = 30;
+    if (this.counterAnimationTimer) {
+      clearInterval(this.counterAnimationTimer);
+      this.counterAnimationTimer = null;
+    }
+
+    const duration = 600;
+    const steps = 24;
     const interval = duration / steps;
 
     const startValues = { ...this.animatedMetrics };
     let currentStep = 0;
 
-    const timer = setInterval(() => {
+    this.counterAnimationTimer = setInterval(() => {
       currentStep++;
       const progress = currentStep / steps;
       const easeProgress = this.easeOutQuart(progress);
@@ -724,7 +974,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       }
 
       if (currentStep >= steps) {
-        clearInterval(timer);
+        if (this.counterAnimationTimer) {
+          clearInterval(this.counterAnimationTimer);
+          this.counterAnimationTimer = null;
+        }
         this.animatedMetrics = { ...newMetrics };
       }
     }, interval);
@@ -753,17 +1006,18 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  private refreshLoadingState(): void {
-    this.loading = this.loadingFolders || this.loadingDocuments || this.loadingTags;
-  }
-
   private refreshCharts(): void {
     if (!isPlatformBrowser(this.platformId)) {
       return;
     }
-    setTimeout(() => {
+    if (this.chartRefreshTimer) {
+      clearTimeout(this.chartRefreshTimer);
+      this.chartRefreshTimer = null;
+    }
+    this.chartRefreshTimer = setTimeout(() => {
+      this.chartRefreshTimer = null;
       this.updateCharts();
-    }, 50);
+    }, 16);
   }
 
   private initCharts(): void {
@@ -774,6 +1028,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private createDoughnutChart(): void {
     if (!this.doughnutChartRef?.nativeElement) return;
+    const theme = this.getChartTheme();
 
     this.doughnutChart = new Chart(this.doughnutChartRef.nativeElement, {
       type: 'doughnut',
@@ -812,7 +1067,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        cutout: '65%',
+        cutout: '68%',
+        layout: {
+          padding: { top: 8, right: 8, bottom: 8, left: 8 }
+        },
         animation: {
           animateScale: true,
           animateRotate: true,
@@ -821,28 +1079,21 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
         },
         plugins: {
           legend: {
-            position: 'right',
+            position: 'bottom',
+            align: 'center',
             labels: {
-              color: 'rgba(255, 255, 255, 0.8)',
-              font: { size: 11, family: 'Inter, system-ui, sans-serif', weight: 500 as any },
-              padding: 12,
+              color: theme.legendColor,
+              font: { size: 12, family: 'Inter, system-ui, sans-serif', weight: 500 as any },
+              padding: 14,
               usePointStyle: true,
-              pointStyle: 'circle',
-              generateLabels: (chart) => {
-                const original = Chart.defaults.plugins.legend.labels.generateLabels;
-                const labels = original?.call(this, chart);
-                return labels?.map((label) => {
-                  label.fillStyle = 'rgba(255, 255, 255, 0.8)';
-                  return label;
-                });
-              }
+              pointStyle: 'circle'
             }
           },
           tooltip: {
-            backgroundColor: 'rgba(0, 0, 0, 0.9)',
-            titleColor: '#fff',
-            bodyColor: '#fff',
-            borderColor: 'rgba(255, 255, 255, 0.2)',
+            backgroundColor: theme.tooltipBackground,
+            titleColor: theme.tooltipTitle,
+            bodyColor: theme.tooltipBody,
+            borderColor: theme.tooltipBorder,
             borderWidth: 1,
             padding: 12,
             cornerRadius: 10,
@@ -857,6 +1108,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private createBarChart(): void {
     if (!this.barChartRef?.nativeElement) return;
+    const theme = this.getChartTheme();
 
     this.barChart = new Chart(this.barChartRef.nativeElement, {
       type: 'bar',
@@ -885,12 +1137,17 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
           borderWidth: 2,
           borderRadius: 10,
           borderSkipped: false,
-          barThickness: 50
+          maxBarThickness: 52,
+          categoryPercentage: 0.62,
+          barPercentage: 0.82
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: {
+          padding: { top: 6, right: 12, bottom: 6, left: 12 }
+        },
         animation: {
           duration: 800,
           easing: 'easeOutQuart'
@@ -898,10 +1155,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: 'rgba(0, 0, 0, 0.9)',
-            titleColor: '#fff',
-            bodyColor: '#fff',
-            borderColor: 'rgba(255, 255, 255, 0.2)',
+            backgroundColor: theme.tooltipBackground,
+            titleColor: theme.tooltipTitle,
+            bodyColor: theme.tooltipBody,
+            borderColor: theme.tooltipBorder,
             borderWidth: 1,
             padding: 12,
             cornerRadius: 10,
@@ -913,10 +1170,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
           y: {
             beginAtZero: true,
             grid: {
-              color: 'rgba(255, 255, 255, 0.05)'
+              color: theme.gridColor
             },
             ticks: {
-              color: 'rgba(255, 255, 255, 0.6)',
+              color: theme.axisColor,
               font: { family: 'Inter, system-ui, sans-serif', size: 11 },
               precision: 0
             }
@@ -924,8 +1181,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
           x: {
             grid: { display: false },
             ticks: {
-              color: 'rgba(255, 255, 255, 0.8)',
-              font: { family: 'Inter, system-ui, sans-serif', size: 11, weight: 500 as any }
+              color: theme.axisStrongColor,
+              font: { family: 'Inter, system-ui, sans-serif', size: 11, weight: 500 as any },
+              maxRotation: 0,
+              minRotation: 0
             }
           }
         }
@@ -935,6 +1194,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private createLineChart(): void {
     if (!this.lineChartRef?.nativeElement) return;
+    const theme = this.getChartTheme();
 
     const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
     const audioData = this.generateTrendData(this.metrics.audios);
@@ -993,6 +1253,9 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: {
+          padding: { top: 6, right: 8, bottom: 6, left: 8 }
+        },
         animation: {
           duration: 1000,
           easing: 'easeOutQuart'
@@ -1000,10 +1263,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: 'rgba(0, 0, 0, 0.9)',
-            titleColor: '#fff',
-            bodyColor: '#fff',
-            borderColor: 'rgba(255, 255, 255, 0.2)',
+            backgroundColor: theme.tooltipBackground,
+            titleColor: theme.tooltipTitle,
+            bodyColor: theme.tooltipBody,
+            borderColor: theme.tooltipBorder,
             borderWidth: 1,
             padding: 12,
             cornerRadius: 10,
@@ -1017,10 +1280,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
           y: {
             beginAtZero: true,
             grid: {
-              color: 'rgba(255, 255, 255, 0.05)'
+              color: theme.gridColor
             },
             ticks: {
-              color: 'rgba(255, 255, 255, 0.6)',
+              color: theme.axisColor,
               font: { family: 'Inter, system-ui, sans-serif', size: 11 },
               precision: 0
             }
@@ -1028,7 +1291,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
           x: {
             grid: { display: false },
             ticks: {
-              color: 'rgba(255, 255, 255, 0.8)',
+              color: theme.axisStrongColor,
               font: { family: 'Inter, system-ui, sans-serif', size: 11, weight: 500 as any }
             }
           }

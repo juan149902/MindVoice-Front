@@ -5,8 +5,7 @@ import { mindmapAccessGuard } from './core/guards/mindmap-access.guard';
 export const routes: Routes = [
   {
     path: '',
-    pathMatch: 'full',
-    redirectTo: 'dashboard',
+    loadComponent: () => import('./pages/landing/landing').then((m) => m.LandingComponent),
   },
   {
     path: 'landing',
@@ -79,6 +78,6 @@ export const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: 'dashboard',
+    redirectTo: '',
   },
 ];

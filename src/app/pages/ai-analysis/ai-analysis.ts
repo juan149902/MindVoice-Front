@@ -29,9 +29,9 @@ interface AnalysisRow {
   standalone: true,
   imports: [CommonModule, FormsModule, MatIconModule],
   template: `
-    <div class="p-8 max-w-[1300px] mx-auto w-full space-y-6">
+    <div class="p-8 max-w-[1300px] mx-auto w-full space-y-6 premium-page-shell">
       <!-- Header with gradient background -->
-      <section class="rounded-2xl bg-gradient-to-br from-primary/20 via-surface-dark/90 to-violet-900/20 border border-primary/30 p-6 space-y-4 backdrop-blur-sm">
+      <section class="premium-page-hero rounded-2xl bg-gradient-to-br from-primary/20 via-surface-dark/90 to-violet-900/20 border border-primary/30 p-6 space-y-4 backdrop-blur-sm">
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div class="space-y-2">
             <h1 class="text-4xl font-black text-white">Análisis IA</h1>
@@ -171,7 +171,7 @@ interface AnalysisRow {
                     <button
                       type="button"
                       class="h-8 px-3 rounded-md border border-primary/40 text-primary text-xs font-semibold hover:bg-primary/10"
-                      (click)="goToMindmaps()"
+                      (click)="goToMindmaps(row.audioId)"
                     >
                       Ver mapas
                     </button>
@@ -368,6 +368,8 @@ export class AiAnalysisComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.state.ensureInitialized();
+
     this.audios$
       .pipe(takeUntil(this.destroy$))
       .subscribe((audios) => {
@@ -430,8 +432,8 @@ export class AiAnalysisComponent implements OnInit, OnDestroy {
     void this.router.navigate(['/summaries'], { queryParams: { audioId } });
   }
 
-  goToMindmaps(): void {
-    void this.router.navigate(['/mind-maps']);
+  goToMindmaps(audioId: string): void {
+    void this.router.navigate(['/mind-maps'], { queryParams: { audioId } });
   }
 
   previewText(value: string): string {

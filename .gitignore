@@ -3,6 +3,7 @@
 # Env variables
 .env*
 !.env.example
+public/runtime-config.local.js
 
 # Compiled output
 /dist

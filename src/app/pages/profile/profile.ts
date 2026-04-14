@@ -40,10 +40,10 @@ import { ConfirmDeleteDialogComponent } from './confirm-delete-dialog';
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="p-8 max-w-[800px] mx-auto w-full space-y-6">
+    <div class="p-8 max-w-[800px] mx-auto w-full space-y-6 premium-page-shell">
       
       <!-- Header con avatar -->
-      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 p-8 shadow-2xl">
+      <section class="premium-page-hero rounded-2xl border border-white/10 bg-gradient-to-br from-primary/20 via-surface-dark/90 to-fuchsia-900/20 p-8 shadow-2xl">
         <div class="flex flex-col md:flex-row items-center gap-6">
           <!-- Avatar con iniciales -->
           <div 
@@ -68,11 +68,11 @@ import { ConfirmDeleteDialogComponent } from './confirm-delete-dialog';
             }
           </div>
           
-          <button
-            type="button"
-            (click)="loadProfile()"
-            [disabled]="userService.loading()"
-            class="h-10 px-4 rounded-lg border border-border-dark text-sm font-semibold text-gray-300 hover:bg-border-dark/70 transition-colors">
+            <button
+              type="button"
+              (click)="loadProfile()"
+              [disabled]="userService.loading()"
+              class="h-10 px-4 rounded-lg bg-gradient-to-r from-primary to-fuchsia-600 border border-primary/40 text-sm font-semibold text-white hover:shadow-[0_0_18px_rgba(124,58,237,0.35)] transition-all">
             <span class="inline-flex items-center gap-2">
               <mat-icon class="text-lg" [class.animate-spin]="userService.loading()">refresh</mat-icon>
               Recargar

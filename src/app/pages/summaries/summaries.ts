@@ -1,15 +1,22 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, OnDestroy, OnInit, PLATFORM_ID, ViewChild, ElementRef, inject, ChangeDetectorRef } from '@angular/core';
-import { FormsModule, ReactiveFormsModule, FormBuilder } from '@angular/forms';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
-import { Observable, Subject, takeUntil } from 'rxjs';
+import { ActivatedRoute } from '@angular/router';
+import { Document, Packer, Paragraph, AlignmentType, HeadingLevel, TextRun } from 'docx';
+import { jsPDF } from 'jspdf';
+import { Observable, Subject, catchError, map, of, switchMap, takeUntil, throwError } from 'rxjs';
 import {
   AudioEntity,
   TranscriptionEntity,
   AiAnalysisEntity,
+  AudioWorkflowService,
 } from '../../core/services/audio-workflow.service';
 import { StateManagementService } from '../../core/services/state-management.service';
 import { AudioDownloaderService } from '../../core/services/audio-downloader.service';
+import { AnalysisArtifactsService } from '../../core/services/analysis-artifacts.service';
+import { NotificationService } from '../../core/services/notification.service';
+import { ExportDialogComponent } from '../../core/services/export-dialog.component';
 
 interface SummaryDisplay {
   audio?: AudioEntity;
@@ -22,11 +29,11 @@ type SearchFilter = 'all' | 'audio' | 'transcription' | 'analysis';
 @Component({
   selector: 'app-summaries',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatIconModule],
+  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatIconModule, ExportDialogComponent],
   template: `
-    <div class="p-8 max-w-[1400px] mx-auto w-full space-y-6">
+    <div class="p-8 max-w-[1400px] mx-auto w-full space-y-6 premium-page-shell">
       <!-- Header -->
-      <section class="rounded-2xl bg-gradient-to-br from-blue-500/20 via-surface-dark/90 to-cyan-900/20 border border-blue-500/30 p-6 space-y-4 backdrop-blur-sm">
+      <section class="premium-page-hero rounded-2xl bg-gradient-to-br from-blue-500/20 via-surface-dark/90 to-cyan-900/20 border border-blue-500/30 p-6 space-y-4 backdrop-blur-sm">
         <div class="flex items-center justify-between gap-4 flex-wrap">
           <div class="space-y-2">
             <h1 class="text-4xl font-black text-white">Resúmenes Ejecutivos</h1>
@@ -49,6 +56,24 @@ type SearchFilter = 'all' | 'audio' | 'transcription' | 'analysis';
       @if (error$ | async) {
         <section class="rounded-xl border border-rose-500/40 bg-gradient-to-r from-rose-500/20 to-rose-500/10 p-4 text-sm text-rose-200 backdrop-blur-sm">
           {{ error$ | async }}
+        </section>
+      }
+
+      @if (operationMessage) {
+        <section
+          class="rounded-xl border p-4 text-sm backdrop-blur-sm shadow-[0_12px_28px_rgba(2,6,23,0.35)]"
+          [ngClass]="{
+            'border-emerald-500/35 bg-gradient-to-r from-emerald-500/20 to-teal-500/10 text-emerald-100': operationMessageType === 'success',
+            'border-rose-500/35 bg-gradient-to-r from-rose-500/20 to-fuchsia-500/10 text-rose-100': operationMessageType === 'error',
+            'border-sky-500/35 bg-gradient-to-r from-sky-500/20 to-indigo-500/10 text-sky-100': operationMessageType === 'info'
+          }"
+        >
+          <div class="flex items-start gap-2">
+            <mat-icon class="text-base mt-0.5">
+              {{ operationMessageType === 'success' ? 'check_circle' : (operationMessageType === 'error' ? 'error' : 'info') }}
+            </mat-icon>
+            <span class="leading-relaxed">{{ operationMessage }}</span>
+          </div>
         </section>
       }
 
@@ -208,7 +233,12 @@ type SearchFilter = 'all' | 'audio' | 'transcription' | 'analysis';
             } @else {
               <div class="space-y-4">
                 @for (summary of pagedSummaries; track getSummaryId(summary)) {
-                  <div class="rounded-lg border border-border-dark bg-background-dark/50 p-5 hover:border-primary/40 transition-all space-y-4">
+                  <div 
+                    class="rounded-lg border bg-background-dark/50 p-5 hover:border-primary/40 transition-all space-y-4"
+                    [class.border-yellow-500]="highlightAudioId && summary.audio?._id === highlightAudioId"
+                    [class.shadow-lg]="highlightAudioId && summary.audio?._id === highlightAudioId"
+                    [class.shadow-yellow-500/20]="highlightAudioId && summary.audio?._id === highlightAudioId"
+                  >
                     <!-- Summary Header -->
                     <div class="flex justify-between items-start gap-4">
                       <div class="flex-1 min-w-0">
@@ -342,20 +372,34 @@ type SearchFilter = 'all' | 'audio' | 'transcription' | 'analysis';
         </div>
       </div>
 
+      @if (showExportDialog) {
+        <app-export-dialog
+          [title]="exportDialogTitle"
+          (formatSelected)="onExportFormatSelected($event)"
+          (cancelled)="onExportDialogCancelled()"
+        />
+      }
+
       <!-- Audio Player (hidden) -->
       <audio #audioPlayer style="display: none;"></audio>
     </div>
   `,
 })
 export class SummariesComponent implements OnInit, OnDestroy {
+  @ViewChild('audioFileInput') audioFileInput?: ElementRef<HTMLInputElement>;
   @ViewChild('audioPlayer') audioPlayer?: ElementRef<HTMLAudioElement>;
 
   private readonly state = inject(StateManagementService);
+  private readonly audioWorkflow = inject(AudioWorkflowService);
+  private readonly analysisArtifacts = inject(AnalysisArtifactsService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly destroy$ = new Subject<void>();
-  private readonly fb = inject(FormBuilder);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly audioDownloader = inject(AudioDownloaderService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly notifications = inject(NotificationService);
+
+  protected highlightAudioId: string | null = null;
 
   loading$: Observable<boolean> = this.state.loading$;
   error$: Observable<string | null> = this.state.error$;
@@ -373,6 +417,9 @@ export class SummariesComponent implements OnInit, OnDestroy {
   isRecording = false;
   recordingTime = 0;
   recordedBlobUrl: string | null = null;
+  private recordedBlob: Blob | null = null;
+  operationMessage = '';
+  operationMessageType: 'success' | 'error' | 'info' = 'info';
 
   private mediaRecorder: MediaRecorder | null = null;
   private recordingChunks: Blob[] = [];
@@ -381,10 +428,24 @@ export class SummariesComponent implements OnInit, OnDestroy {
   private allTranscriptions: TranscriptionEntity[] = [];
   private allAnalyses: AiAnalysisEntity[] = [];
 
+  showExportDialog = false;
+  exportDialogTitle = '';
+  selectedSummary: SummaryDisplay | null = null;
+
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) {
       return;
     }
+
+    this.state.ensureInitialized();
+
+    this.route.queryParamMap.pipe(takeUntil(this.destroy$)).subscribe((params) => {
+      const audioId = params.get('audioId');
+      if (audioId) {
+        this.highlightAudioId = audioId;
+        this.cdr.markForCheck();
+      }
+    });
 
     this.audios$.pipe(takeUntil(this.destroy$)).subscribe((audios) => {
       this.allAudios = audios;
@@ -419,30 +480,43 @@ export class SummariesComponent implements OnInit, OnDestroy {
     const files = input.files;
     if (files && files.length > 0) {
       this.selectedAudioFile = files[0];
+    } else {
+      this.selectedAudioFile = null;
     }
   }
 
   uploadAudio(): void {
     if (!this.selectedAudioFile) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = reader.result as string;
-      this.state.createAudio({
-        filePath: this.selectedAudioFile!.name,
-        duration: 0,
-        format: this.selectedAudioFile!.type,
-      })
-        .pipe(takeUntil(this.destroy$))
-        .subscribe({
-          next: () => {
-            this.selectedAudioFile = null;
-            this.cdr.markForCheck();
-          },
-          error: (err) => console.error('Error uploading audio:', err),
-        });
-    };
-    reader.readAsDataURL(this.selectedAudioFile);
+    const file = this.selectedAudioFile;
+    this.operationMessage = '';
+    this.operationMessageType = 'info';
+    this.notifications.info(`Procesando audio: ${file.name}...`);
+    
+    this.ingestAudioWithAnalysis(file, file.name, 0, file.type || 'audio/mpeg')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.operationMessage = 'Audio procesado correctamente: análisis, documento y mapa actualizados.';
+          this.operationMessageType = 'success';
+          this.notifications.success('Audio procesado correctamente');
+          this.selectedAudioFile = null;
+          if (this.audioFileInput?.nativeElement) {
+            this.audioFileInput.nativeElement.value = '';
+          }
+          this.cdr.markForCheck();
+        },
+        error: (err) => {
+          const errorMsg = this.resolveAudioErrorMessage(err);
+          this.operationMessage = errorMsg;
+          this.operationMessageType = 'error';
+          this.notifications.error(errorMsg);
+          if (this.audioFileInput?.nativeElement) {
+            this.audioFileInput.nativeElement.value = '';
+          }
+          this.cdr.markForCheck();
+        },
+      });
   }
 
   startRecording(): void {
@@ -469,6 +543,7 @@ export class SummariesComponent implements OnInit, OnDestroy {
 
     this.mediaRecorder.onstop = () => {
       const blob = new Blob(this.recordingChunks, { type: 'audio/webm' });
+      this.recordedBlob = blob;
       this.recordedBlobUrl = URL.createObjectURL(blob);
       this.isRecording = false;
       clearInterval(this.recordingInterval);
@@ -483,29 +558,107 @@ export class SummariesComponent implements OnInit, OnDestroy {
       this.mediaRecorder.stop();
       this.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
     }
+    if (this.recordedBlobUrl) {
+      URL.revokeObjectURL(this.recordedBlobUrl);
+    }
     this.isRecording = false;
     this.recordingTime = 0;
     this.recordedBlobUrl = null;
+    this.recordedBlob = null;
     clearInterval(this.recordingInterval);
   }
 
   uploadRecordedAudio(): void {
-    if (!this.recordedBlobUrl) return;
+    if (!this.recordedBlob) return;
 
-    this.state.createAudio({
-      filePath: `recording-${Date.now()}.webm`,
-      duration: this.recordingTime,
-      format: 'audio/webm',
-    })
+    const fileName = `recording-${Date.now()}.webm`;
+    this.operationMessage = '';
+    this.operationMessageType = 'info';
+    this.notifications.info('Procesando grabación...');
+    
+    this.ingestAudioWithAnalysis(this.recordedBlob, fileName, this.recordingTime, 'audio/webm')
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
+          this.operationMessage = 'Grabación procesada correctamente: análisis, documento y mapa actualizados.';
+          this.operationMessageType = 'success';
+          this.notifications.success('Grabación procesada correctamente');
+          if (this.recordedBlobUrl) {
+            URL.revokeObjectURL(this.recordedBlobUrl);
+          }
           this.recordedBlobUrl = null;
+          this.recordedBlob = null;
           this.recordingTime = 0;
           this.cdr.markForCheck();
         },
-        error: (err) => console.error('Error uploading recording:', err),
+        error: (err) => {
+          const errorMsg = this.resolveAudioErrorMessage(err);
+          this.operationMessage = errorMsg;
+          this.operationMessageType = 'error';
+          this.notifications.error(errorMsg);
+          this.cdr.markForCheck();
+        },
       });
+  }
+
+  private ingestAudioWithAnalysis(
+    audioBlob: Blob,
+    fileName: string,
+    duration: number,
+    format: string,
+  ): Observable<AiAnalysisEntity> {
+    return this.state.createAudio({
+      filePath: fileName,
+      duration,
+      format,
+    }).pipe(
+      switchMap((audio) => {
+        if (!audio._id) {
+          return throwError(() => new Error('El backend creó el audio sin _id.'));
+        }
+        return this.audioWorkflow.analyzeAudio(audioBlob, fileName).pipe(
+          map((aiResult) => ({ audioId: audio._id as string, aiResult })),
+        );
+      }),
+      switchMap(({ audioId, aiResult }) => {
+        const transcriptionText = this.audioWorkflow.extractTranscriptionText(aiResult) || `Transcripción automática de ${fileName}`;
+        return this.state.createTranscription({
+          audioId,
+          text: transcriptionText,
+          timestamps: [],
+        }).pipe(
+          map((transcription) => ({ audioId, transcription, aiResult, transcriptionText })),
+        );
+      }),
+      switchMap(({ audioId, transcription, aiResult, transcriptionText }) => {
+        if (!transcription._id) {
+          return throwError(() => new Error('El backend creó la transcripción sin _id.'));
+        }
+        const structuredPrompt = this.audioWorkflow.buildProfessionalAnalysisPrompt(transcriptionText);
+
+        return this.audioWorkflow.analyzeText(structuredPrompt).pipe(
+          catchError(() => of(aiResult)),
+          switchMap((professionalResult) => this.audioWorkflow.createAnalysisFromMindvoice(
+            transcription._id as string,
+            professionalResult,
+            transcriptionText,
+          )),
+          switchMap((analysis) => this.analysisArtifacts.createProfessionalArtifacts({
+            audioId,
+            audioFileName: fileName,
+            transcriptionId: transcription._id as string,
+            transcriptionText,
+            analysis,
+          }).pipe(
+            map(() => analysis),
+          )),
+          map((analysis) => {
+            this.state.refreshAllData();
+            return analysis;
+          }),
+        );
+      }),
+    );
   }
 
   playAudio(audio: AudioEntity): void {
@@ -536,22 +689,42 @@ export class SummariesComponent implements OnInit, OnDestroy {
   exportToDocument(summary: SummaryDisplay): void {
     if (!summary.analysis) return;
 
-    const exportType = prompt('Exportar como:\n1. PDF\n2. DOCX\n3. TXT', '1');
-    if (!exportType) return;
+    this.selectedSummary = summary;
+    this.exportDialogTitle = this.getSummaryTitle(summary);
+    this.showExportDialog = true;
+  }
 
-    if (exportType === '1') {
-      this.exportToPDF(summary);
-    } else if (exportType === '2') {
-      this.exportToDOCX(summary);
-    } else if (exportType === '3') {
-      this.exportToTXT(summary);
+  onExportFormatSelected(format: 'png' | 'pdf' | 'docx'): void {
+    this.showExportDialog = false;
+    
+    if (!this.selectedSummary) return;
+
+    switch (format) {
+      case 'pdf':
+        this.exportToPDF(this.selectedSummary);
+        this.notifications.success('Resumen exportado en PDF');
+        break;
+      case 'docx':
+        this.exportToDOCX(this.selectedSummary);
+        this.notifications.success('Resumen exportado en Word');
+        break;
+      case 'png':
+        this.exportToTXT(this.selectedSummary);
+        this.notifications.success('Resumen exportado en TXT');
+        break;
     }
+    
+    this.selectedSummary = null;
+  }
+
+  onExportDialogCancelled(): void {
+    this.showExportDialog = false;
+    this.selectedSummary = null;
   }
 
   private exportToPDF(summary: SummaryDisplay): void {
     if (!summary.analysis) return;
 
-    const { jsPDF } = window as any;
     const doc = new jsPDF();
     
     let yPosition = 20;
@@ -565,13 +738,13 @@ export class SummariesComponent implements OnInit, OnDestroy {
     yPosition += 15;
 
     doc.setFontSize(12);
-    doc.setFont(undefined, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.text('Resumen:', margin, yPosition);
     yPosition += 8;
 
-    doc.setFont(undefined, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
-    const resumeLines = doc.splitTextToSize(summary.analysis.result.resumen, maxWidth) as string[];
+    const resumeLines = doc.splitTextToSize(summary.analysis.result.resumen || '', maxWidth) as string[];
     resumeLines.forEach((line: string) => {
       if (yPosition > pageHeight - 20) {
         doc.addPage();
@@ -587,12 +760,12 @@ export class SummariesComponent implements OnInit, OnDestroy {
       yPosition = 20;
     }
 
-    doc.setFont(undefined, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.text('Temas Identificados:', margin, yPosition);
     yPosition += 8;
 
-    doc.setFont(undefined, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
     (summary.analysis.result.temas || []).forEach(tema => {
       if (yPosition > pageHeight - 20) {
@@ -609,12 +782,12 @@ export class SummariesComponent implements OnInit, OnDestroy {
       yPosition = 20;
     }
 
-    doc.setFont(undefined, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.text('Acciones Recomendadas:', margin, yPosition);
     yPosition += 8;
 
-    doc.setFont(undefined, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(11);
     (summary.analysis.result.acciones || []).forEach(accion => {
       if (yPosition > pageHeight - 20) {
@@ -631,7 +804,7 @@ export class SummariesComponent implements OnInit, OnDestroy {
       yPosition = 20;
     }
 
-    doc.setFont(undefined, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.text(`Sentimiento: ${summary.analysis.result.sentimiento || 'No clasificado'}`, margin, yPosition);
 
@@ -641,66 +814,55 @@ export class SummariesComponent implements OnInit, OnDestroy {
   private exportToDOCX(summary: SummaryDisplay): void {
     if (!summary.analysis) return;
 
-    const { Document, Packer, Paragraph, AlignmentType, TextRun, BorderStyle } = (window as any).docx;
-    
     const sections = [
       new Paragraph({
         text: 'RESUMEN EJECUTIVO',
-        heading: 'Heading1',
+        heading: HeadingLevel.HEADING_1,
         alignment: AlignmentType.CENTER,
         spacing: { after: 200 },
-        bold: true,
-        size: 32,
       }),
       new Paragraph({
-        text: 'Resumen:',
-        bold: true,
+        children: [new TextRun({ text: 'Resumen:', bold: true, size: 28 })],
         spacing: { before: 100, after: 100 },
-        size: 24,
       }),
       new Paragraph({
-        text: summary.analysis.result.resumen,
+        children: [new TextRun({ text: summary.analysis.result.resumen, size: 24 })],
         spacing: { after: 200 },
-        size: 22,
       }),
       new Paragraph({
-        text: 'Temas Identificados:',
-        bold: true,
+        children: [new TextRun({ text: 'Temas Identificados:', bold: true, size: 28 })],
         spacing: { before: 100, after: 100 },
-        size: 24,
       }),
-      ...((summary.analysis.result.temas || []).map(tema =>
+      ...((summary.analysis.result.temas || []).map((tema) =>
         new Paragraph({
-          text: tema,
+          children: [new TextRun({ text: tema, size: 24 })],
           spacing: { after: 50 },
           indent: { left: 200 },
-          size: 22,
         })
       )),
       new Paragraph({
-        text: 'Acciones Recomendadas:',
-        bold: true,
+        children: [new TextRun({ text: 'Acciones Recomendadas:', bold: true, size: 28 })],
         spacing: { before: 100, after: 100 },
-        size: 24,
       }),
-      ...((summary.analysis.result.acciones || []).map(accion =>
+      ...((summary.analysis.result.acciones || []).map((accion) =>
         new Paragraph({
-          text: `${accion.accion} (${accion.prioridad})`,
+          children: [new TextRun({ text: `${accion.accion} (${accion.prioridad})`, size: 24 })],
           spacing: { after: 50 },
           indent: { left: 200 },
-          size: 22,
         })
       )),
       new Paragraph({
-        text: `Sentimiento: ${summary.analysis.result.sentimiento || 'No clasificado'}`,
+        children: [new TextRun({
+          text: `Sentimiento: ${summary.analysis.result.sentimiento || 'No clasificado'}`,
+          bold: true,
+          size: 24,
+        })],
         spacing: { before: 100 },
-        bold: true,
-        size: 22,
       }),
     ];
 
     const doc = new Document({ sections: [{ children: sections }] });
-    Packer.toBlob(doc).then((blob: any) => {
+    Packer.toBlob(doc).then((blob) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -889,5 +1051,121 @@ ${summary.analysis.result.sentimiento || 'No clasificado'}
     if (this.currentPage < 1) {
       this.currentPage = 1;
     }
+  }
+
+  private isTimeoutError(error: unknown): boolean {
+    return error instanceof Error && error.name === 'TimeoutError';
+  }
+
+  private resolveAudioErrorMessage(error: unknown): string {
+    if (this.isTimeoutError(error)) {
+      return 'El análisis de IA tardó más de lo esperado. Intenta de nuevo en unos segundos.';
+    }
+
+    if (this.isMissingAiApiKeyError(error)) {
+      return 'Falta configurar una API key de IA. Define OPENROUTER_API_KEY o GEMINI_API_KEY para continuar.';
+    }
+
+    if (this.isInvalidOpenRouterApiKeyError(error)) {
+      return 'La API key de OpenRouter es inválida o no tiene permisos. Actualiza OPENROUTER_API_KEY o usa GEMINI_API_KEY.';
+    }
+
+    if (this.isOpenRouterCreditsError(error)) {
+      return 'Sin créditos en OpenRouter. Recarga tu saldo en https://openrouter.ai/credits';
+    }
+
+    if (this.isRateLimitError(error)) {
+      return 'Demasiadas solicitudes a OpenRouter. Espera unos segundos e intenta nuevamente.';
+    }
+
+    if (this.isGeminiQuotaError(error)) {
+      return 'Tu proveedor de IA no tiene cuota/crédito disponible. Activa facturación o usa otra API key.';
+    }
+
+    if (this.isServerAudioAnalyzeError(error)) {
+      return 'La API devolvió error al analizar el audio. Ya se intentó modo de compatibilidad automática; intenta nuevamente.';
+    }
+
+    return 'No se pudo procesar el audio con IA. Revisa el formato e intenta nuevamente.';
+  }
+
+  private isOpenRouterCreditsError(error: unknown): boolean {
+    const rawMessage = error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+    const message = rawMessage.toLowerCase();
+    return message.includes('openrouter_credits_required')
+      || message.includes('insufficient credits')
+      || message.includes('credits');
+  }
+
+  private isRateLimitError(error: unknown): boolean {
+    const rawMessage = error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+    return rawMessage.toLowerCase().includes('429')
+      || rawMessage.toLowerCase().includes('rate limit');
+  }
+
+  private isMissingAiApiKeyError(error: unknown): boolean {
+    const rawMessage = error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+    const message = rawMessage.toLowerCase();
+    return message.includes('ai_api_key_missing')
+      || message.includes('openrouter_api_key_missing');
+  }
+
+  private isInvalidOpenRouterApiKeyError(error: unknown): boolean {
+    const rawMessage = error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+    const message = rawMessage.toLowerCase();
+    return message.includes('openrouter_api_key_invalid')
+      || message.includes('openrouter error 401')
+      || message.includes('openrouter error 403')
+      || message.includes('unauthorized')
+      || message.includes('invalid api key')
+      || message.includes('invalid_api_key');
+  }
+
+  private isGeminiQuotaError(error: unknown): boolean {
+    if (
+      typeof error === 'object'
+      && error !== null
+      && 'status' in error
+      && [402, 429].includes(Number((error as { status?: number }).status))
+    ) {
+      return true;
+    }
+
+    const rawMessage = error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : '';
+    const message = rawMessage.toLowerCase();
+    return message.includes('gemini_quota_exceeded')
+      || message.includes('quota')
+      || message.includes('resource_exhausted')
+      || message.includes('rate limit')
+      || message.includes('billing')
+      || message.includes('insufficient credits')
+      || message.includes('payment required');
+  }
+
+  private isServerAudioAnalyzeError(error: unknown): boolean {
+    return typeof error === 'object'
+      && error !== null
+      && 'status' in error
+      && Number((error as { status?: number }).status) === 500;
   }
 }

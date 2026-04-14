@@ -9,6 +9,7 @@ import { inject, PLATFORM_ID } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 import { Router, CanActivateFn } from '@angular/router';
 import { TokenStorageService } from '../services/token-storage.service';
+import { StateManagementService } from '../services/state-management.service';
 
 /**
  * Verifica si un token JWT ha expirado
@@ -57,6 +58,7 @@ function isTokenExpired(token: string): boolean {
 export const authGuard: CanActivateFn = (route, state) => {
   const platformId = inject(PLATFORM_ID);
   const tokenStorage = inject(TokenStorageService);
+  const stateManagement = inject(StateManagementService);
   const router = inject(Router);
 
   // En SSR, permitir acceso para que se renderice el componente
@@ -89,6 +91,7 @@ export const authGuard: CanActivateFn = (route, state) => {
   }
 
   // Token válido, permitir acceso
+  stateManagement.ensureInitialized();
   return true;
 };
 

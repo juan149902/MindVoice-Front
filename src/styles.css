@@ -147,31 +147,114 @@ body.auth-hide-chatbot bp-widget {
 
 .app-futuristic-shell {
   isolation: isolate;
+  background: linear-gradient(180deg, #13081f 0%, #0b0514 56%, #07030e 100%);
 }
 
 .app-futuristic-shell::before {
   content: '';
   position: absolute;
-  inset: -20% -12%;
-  pointer-events: none;
-  z-index: -2;
-  background:
-    radial-gradient(circle at 8% 12%, rgba(139, 92, 246, 0.2), transparent 38%),
-    radial-gradient(circle at 86% 78%, rgba(56, 189, 248, 0.16), transparent 42%),
-    radial-gradient(circle at 45% 40%, rgba(15, 23, 42, 0.65), rgba(2, 6, 23, 0.8));
-}
-
-.app-futuristic-shell::after {
-  content: '';
-  position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: -1;
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
-  background-size: 26px 26px;
-  opacity: 0.38;
+  background:
+    radial-gradient(940px 380px at 12% -14%, rgba(124, 58, 237, 0.34), transparent 64%),
+    radial-gradient(860px 340px at 100% -8%, rgba(168, 85, 247, 0.22), transparent 62%),
+    radial-gradient(760px 300px at 52% -18%, rgba(217, 70, 239, 0.12), transparent 66%);
+}
+
+.app-futuristic-shell::after {
+  content: none;
+}
+
+.app-premium-sidebar {
+  background: linear-gradient(180deg, rgba(29, 18, 47, 0.95) 0%, rgba(18, 11, 31, 0.96) 100%);
+  border-right: 1px solid rgba(167, 139, 250, 0.24);
+  box-shadow: 12px 0 34px rgba(11, 6, 20, 0.42);
+  backdrop-filter: blur(14px);
+}
+
+.app-premium-header {
+  border-bottom: 1px solid rgba(167, 139, 250, 0.22);
+  background: linear-gradient(180deg, rgba(27, 16, 46, 0.74), rgba(17, 10, 32, 0.68));
+  backdrop-filter: blur(14px);
+}
+
+.app-premium-nav-link {
+  color: rgba(237, 233, 254, 0.92);
+  transition: all 0.2s ease;
+}
+
+.app-premium-nav-link mat-icon {
+  color: rgba(196, 181, 253, 0.9);
+  transition: color 0.2s ease;
+}
+
+.app-premium-nav-link:hover {
+  background: rgba(124, 58, 237, 0.2);
+  border-color: rgba(167, 139, 250, 0.38);
+  box-shadow: 0 10px 24px rgba(18, 11, 31, 0.34);
+}
+
+.app-premium-nav-link:hover mat-icon {
+  color: #ddd6fe;
+}
+
+.app-premium-nav-link-active {
+  background: linear-gradient(90deg, rgba(124, 58, 237, 0.34), rgba(168, 85, 247, 0.24));
+  border-color: rgba(167, 139, 250, 0.52) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(196, 181, 253, 0.18),
+    0 12px 24px rgba(12, 8, 22, 0.38);
+}
+
+.app-premium-nav-link-active,
+.app-premium-nav-link-active mat-icon {
+  color: #faf5ff;
+}
+
+.app-premium-icon-btn {
+  border: 1px solid rgba(167, 139, 250, 0.24);
+  background: rgba(30, 19, 49, 0.52);
+  box-shadow: inset 0 1px 0 rgba(233, 213, 255, 0.06);
+}
+
+.app-premium-icon-btn:hover {
+  border-color: rgba(196, 181, 253, 0.5);
+  background: rgba(54, 34, 88, 0.72);
+}
+
+.app-premium-search {
+  background: rgba(24, 15, 40, 0.62);
+  border: 1px solid rgba(167, 139, 250, 0.22);
+  box-shadow: inset 0 1px 0 rgba(233, 213, 255, 0.05);
+}
+
+.app-premium-search:focus {
+  border-color: rgba(167, 139, 250, 0.6);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.24);
+}
+
+.app-premium-primary-btn {
+  border: 1px solid rgba(196, 181, 253, 0.44);
+  background: linear-gradient(90deg, #7c3aed 0%, #9333ea 100%);
+  box-shadow: 0 12px 24px rgba(124, 58, 237, 0.36);
+}
+
+.app-premium-primary-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 26px rgba(124, 58, 237, 0.46);
+}
+
+.app-premium-secondary-btn {
+  border: 1px solid rgba(167, 139, 250, 0.24);
+  background: rgba(30, 19, 49, 0.44);
+  color: #ddd6fe;
+}
+
+.app-premium-secondary-btn:hover {
+  border-color: rgba(196, 181, 253, 0.44);
+  background: rgba(54, 34, 88, 0.66);
+  color: #faf5ff;
 }
 
 .app-content-shell > * {
@@ -182,12 +265,12 @@ body.auth-hide-chatbot bp-widget {
 .app-content-shell section.rounded-2xl,
 .app-content-shell article.rounded-xl,
 .app-content-shell article.rounded-2xl {
-  box-shadow: 0 14px 40px rgba(2, 6, 23, 0.34);
+  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.3);
   backdrop-filter: blur(10px);
 }
 
 .app-content-shell .bg-surface-dark {
-  background-color: rgba(22, 17, 33, 0.72) !important;
+  background-color: rgba(30, 19, 49, 0.82) !important;
 }
 
 .app-content-shell .border-border-dark {
@@ -195,20 +278,125 @@ body.auth-hide-chatbot bp-widget {
 }
 
 .app-content-shell .bg-background-dark {
-  background-color: rgba(11, 5, 20, 0.62) !important;
+  background-color: rgba(16, 8, 29, 0.8) !important;
+}
+
+.theme-light .app-futuristic-shell {
+  background: linear-gradient(180deg, #f7f5ff 0%, #eef2ff 56%, #e9eefb 100%);
 }
 
 .theme-light .app-futuristic-shell::before {
   background:
-    radial-gradient(circle at 8% 12%, rgba(124, 58, 237, 0.14), transparent 38%),
-    radial-gradient(circle at 86% 78%, rgba(56, 189, 248, 0.1), transparent 42%),
-    radial-gradient(circle at 45% 40%, rgba(255, 255, 255, 0.9), rgba(226, 232, 240, 0.95));
+    radial-gradient(860px 320px at 12% -10%, rgba(124, 58, 237, 0.14), transparent 58%),
+    radial-gradient(760px 280px at 96% -8%, rgba(168, 85, 247, 0.12), transparent 60%);
+}
+
+.theme-light .app-premium-sidebar {
+  background: linear-gradient(180deg, rgba(251, 248, 255, 0.96) 0%, rgba(244, 240, 255, 0.96) 100%);
+  border-right-color: rgba(167, 139, 250, 0.28);
+  box-shadow: 10px 0 28px rgba(76, 29, 149, 0.12);
+}
+
+.theme-light .app-premium-header {
+  border-bottom-color: rgba(167, 139, 250, 0.26);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(247, 244, 255, 0.9));
+}
+
+.theme-light .app-premium-nav-link {
+  color: #433062;
+}
+
+.theme-light .app-premium-nav-link mat-icon {
+  color: #7c5aa8;
+}
+
+.theme-light .app-premium-nav-link:hover {
+  background: rgba(124, 58, 237, 0.1);
+  border-color: rgba(124, 58, 237, 0.26);
+}
+
+.theme-light .app-premium-nav-link-active {
+  background: linear-gradient(90deg, rgba(124, 58, 237, 0.16), rgba(168, 85, 247, 0.1));
+  border-color: rgba(124, 58, 237, 0.36) !important;
+}
+
+.theme-light .app-premium-nav-link-active,
+.theme-light .app-premium-nav-link-active mat-icon {
+  color: #4c1d95;
+}
+
+.theme-light .app-premium-icon-btn {
+  border-color: rgba(167, 139, 250, 0.32);
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.theme-light .app-premium-icon-btn:hover {
+  border-color: rgba(124, 58, 237, 0.36);
+  background: rgba(124, 58, 237, 0.12);
+}
+
+.theme-light .app-premium-search {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(167, 139, 250, 0.3);
+}
+
+.theme-light .app-premium-search:focus {
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
+}
+
+.theme-light .app-premium-secondary-btn {
+  border-color: rgba(167, 139, 250, 0.28);
+  background: rgba(255, 255, 255, 0.94);
+  color: #433062;
+}
+
+.theme-light .app-premium-secondary-btn:hover {
+  background: rgba(124, 58, 237, 0.12);
+  border-color: rgba(124, 58, 237, 0.32);
+  color: #3b0764;
 }
 
 .theme-light .app-content-shell .bg-surface-dark {
-  background-color: rgba(255, 255, 255, 0.82) !important;
+  background-color: rgba(255, 255, 255, 0.92) !important;
 }
 
 .theme-light .app-content-shell .bg-background-dark {
-  background-color: rgba(248, 250, 252, 0.86) !important;
+  background-color: rgba(245, 243, 255, 0.88) !important;
+}
+
+.premium-page-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.premium-page-shell::before {
+  content: '';
+  position: absolute;
+  inset: -4% -6%;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.12), rgba(168, 85, 247, 0.07) 45%, transparent 100%);
+  opacity: 0.74;
+}
+
+.premium-page-shell > * {
+  position: relative;
+}
+
+.premium-page-hero {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 22px 50px rgba(2, 6, 23, 0.4);
+  backdrop-filter: blur(12px);
+  background: linear-gradient(145deg, rgba(38, 23, 62, 0.82), rgba(18, 11, 33, 0.9));
+}
+
+.theme-light .premium-page-shell::before {
+  background: linear-gradient(180deg, rgba(124, 58, 237, 0.08), rgba(168, 85, 247, 0.04) 45%, transparent 100%);
+  opacity: 0.55;
+}
+
+.theme-light .premium-page-hero {
+  border-color: rgba(167, 139, 250, 0.24);
+  box-shadow: 0 20px 45px rgba(76, 29, 149, 0.12);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(245, 241, 255, 0.92)) !important;
 }

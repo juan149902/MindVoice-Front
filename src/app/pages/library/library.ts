@@ -25,8 +25,8 @@ type SortMode = 'newest' | 'oldest' | 'name';
   standalone: true,
   imports: [CommonModule, FormsModule, MatIconModule],
   template: `
-    <div class="p-8 max-w-[1200px] mx-auto w-full space-y-6">
-      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 p-6 shadow-2xl">
+    <div class="p-8 max-w-[1200px] mx-auto w-full space-y-6 premium-page-shell">
+      <section class="premium-page-hero rounded-2xl border border-white/10 bg-gradient-to-br from-sky-500/16 via-surface-dark/90 to-cyan-900/18 p-6 shadow-2xl">
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 class="text-3xl font-black text-white tracking-tight">Biblioteca de Carpetas</h1>
@@ -44,7 +44,7 @@ type SortMode = 'newest' | 'oldest' | 'name';
             </select>
             <button
               type="button"
-              class="h-10 px-4 rounded-lg border border-border-dark text-sm font-semibold text-gray-300 hover:bg-border-dark/70 transition-colors"
+              class="h-10 px-4 rounded-lg bg-gradient-to-r from-sky-600 to-cyan-600 border border-sky-400/40 text-sm font-semibold text-white hover:shadow-[0_0_18px_rgba(14,165,233,0.35)] transition-all"
               (click)="loadFolders()"
               [disabled]="loading || submitting">
               <span class="inline-flex items-center gap-2">

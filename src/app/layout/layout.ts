@@ -5,13 +5,15 @@ import { MatIconModule } from '@angular/material/icon';
 import { AuthService } from '../core/services/auth.service';
 import { TokenStorageService } from '../core/services/token-storage.service';
 import { AppPreferencesService } from '../core/services/app-preferences.service';
+import { NotificationContainerComponent } from '../core/services/notification-container.component';
 
 @Component({
   selector: 'app-layout',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatIconModule, NgIf, NgClass],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatIconModule, NgIf, NgClass, NotificationContainerComponent],
   template: `
-    <div class="relative flex h-screen overflow-hidden bg-background-dark text-white app-futuristic-shell" [ngClass]="{ 'theme-light': theme() === 'light', 'theme-dark': theme() !== 'light' }">
+    <app-notification-container></app-notification-container>
+    <div class="relative flex h-screen overflow-hidden text-white app-futuristic-shell" [ngClass]="{ 'theme-light': theme() === 'light', 'theme-dark': theme() !== 'light' }">
       <button
         *ngIf="isMobile() && isSidebarOpen()"
         type="button"
@@ -21,7 +23,7 @@ import { AppPreferencesService } from '../core/services/app-preferences.service'
       ></button>
 
       <aside
-        class="flex flex-col shrink-0 bg-surface-dark transition-all duration-300 ease-out"
+        class="app-premium-sidebar flex flex-col shrink-0 transition-all duration-300 ease-out"
         [ngClass]="getSidebarClasses()"
       >
         <div class="flex h-full flex-col overflow-y-auto p-6">
@@ -44,7 +46,7 @@ import { AppPreferencesService } from '../core/services/app-preferences.service'
             <button
               *ngIf="isMobile()"
               type="button"
-              class="flex size-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white"
+              class="app-premium-icon-btn flex size-11 items-center justify-center rounded-xl text-white"
               aria-label="Cerrar menú"
               (click)="closeSidebar()"
             >
@@ -53,36 +55,36 @@ import { AppPreferencesService } from '../core/services/app-preferences.service'
           </div>
           
           <nav class="flex flex-col gap-1 flex-1">
-            <a routerLink="/dashboard" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" [routerLinkActiveOptions]="{exact: true}" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
-              <mat-icon class="group-hover:text-primary">dashboard</mat-icon>
+            <a routerLink="/dashboard" routerLinkActive="app-premium-nav-link-active" [routerLinkActiveOptions]="{exact: true}" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
+              <mat-icon>dashboard</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.dashboard', 'Panel Principal') }}</p>
             </a>
-            <a routerLink="/ai-analysis" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
-              <mat-icon class="group-hover:text-primary">insights</mat-icon>
+            <a routerLink="/ai-analysis" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
+              <mat-icon>insights</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.aiAnalysis', 'Análisis IA') }}</p>
             </a>
-            <a routerLink="/recordings" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
-              <mat-icon class="group-hover:text-primary">mic</mat-icon>
+            <a routerLink="/recordings" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
+              <mat-icon>mic</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.recordings', 'Grabaciones') }}</p>
             </a>
-            <a routerLink="/summaries" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
-              <mat-icon class="group-hover:text-primary">auto_awesome</mat-icon>
+            <a routerLink="/summaries" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
+              <mat-icon>auto_awesome</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.summaries', 'Resúmenes IA') }}</p>
             </a>
-            <a routerLink="/tasks" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
-              <mat-icon class="group-hover:text-primary">check_box</mat-icon>
+            <a routerLink="/tasks" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
+              <mat-icon>check_box</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.tasks', 'Tareas de Voz') }}</p>
             </a>
-            <a routerLink="/mind-maps" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
-              <mat-icon class="group-hover:text-primary">account_tree</mat-icon>
+            <a routerLink="/mind-maps" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
+              <mat-icon>account_tree</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.mindmaps', 'Mapas Mentales') }}</p>
             </a>
-            <a routerLink="/tags" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
-              <mat-icon class="group-hover:text-primary">local_offer</mat-icon>
+            <a routerLink="/tags" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
+              <mat-icon>local_offer</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.tags', 'Etiquetas') }}</p>
             </a>
-            <a routerLink="/settings" routerLinkActive="bg-primary/10 text-primary border-primary/20 border" class="flex items-center gap-3 px-3 py-2.5 text-gray-400 hover:bg-white/5 hover:text-white rounded-lg transition-all group border border-transparent" (click)="handleNavClick()">
-              <mat-icon class="group-hover:text-primary">settings</mat-icon>
+            <a routerLink="/settings" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
+              <mat-icon>settings</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.settings', 'Configuración') }}</p>
             </a>
           </nav>
@@ -98,7 +100,7 @@ import { AppPreferencesService } from '../core/services/app-preferences.service'
 
             <button
               type="button"
-              class="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-border-dark px-4 py-2.5 text-sm font-semibold text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+              class="app-premium-secondary-btn mt-4 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
               (click)="logout()"
             >
               <mat-icon>logout</mat-icon>
@@ -109,13 +111,13 @@ import { AppPreferencesService } from '../core/services/app-preferences.service'
       </aside>
 
       <!-- Main Content -->
-      <main class="min-w-0 flex-1 flex flex-col overflow-hidden bg-background-dark">
-        <header class="h-16 shrink-0 border-b border-border-dark bg-surface-dark/50 px-4 backdrop-blur-md md:px-6 xl:px-8">
+      <main class="min-w-0 flex-1 flex flex-col overflow-hidden">
+        <header class="app-premium-header h-16 shrink-0 px-4 md:px-6 xl:px-8">
           <div class="flex h-full items-center justify-between gap-4">
           <div class="flex items-center gap-4 flex-1 min-w-0">
             <button
               type="button"
-              class="flex size-10 items-center justify-center rounded-lg border border-border-dark text-gray-300 hover:bg-white/5 hover:text-white transition-colors"
+              class="app-premium-icon-btn flex size-10 items-center justify-center rounded-lg text-gray-300 transition-colors"
               aria-label="Abrir o cerrar menú"
               (click)="toggleSidebar()"
             >
@@ -123,26 +125,26 @@ import { AppPreferencesService } from '../core/services/app-preferences.service'
             </button>
             <div class="relative w-full max-w-md">
               <mat-icon class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">search</mat-icon>
-              <input class="w-full bg-background-dark/50 border border-border-dark rounded-lg pl-10 pr-4 h-10 text-sm focus:ring-2 focus:ring-primary focus:border-transparent text-gray-200 placeholder:text-gray-500 outline-none" [placeholder]="t('layout.search', 'Buscar ideas, tareas o grabaciones...')" type="text"/>
+              <input class="app-premium-search w-full rounded-lg pl-10 pr-4 h-10 text-sm text-gray-200 placeholder:text-gray-500 outline-none" [placeholder]="t('layout.search', 'Buscar ideas, tareas o grabaciones...')" type="text"/>
             </div>
           </div>
           <div class="flex items-center gap-2 md:gap-4">
             <button
               type="button"
-              class="flex size-10 items-center justify-center rounded-lg border transition-colors"
+              class="app-premium-icon-btn flex size-10 items-center justify-center rounded-lg transition-colors"
               [ngClass]="theme() === 'light'
                 ? 'border-amber-300/60 bg-amber-400/10 text-amber-500 hover:bg-amber-400/20'
-                : 'border-border-dark text-sky-300 hover:bg-white/5 hover:text-sky-200'"
+                : 'border-border-dark text-violet-300 hover:bg-white/5 hover:text-violet-200'"
               [attr.aria-label]="theme() === 'light' ? 'Activar modo oscuro' : 'Activar modo claro'"
               (click)="toggleTheme()"
             >
               <mat-icon>{{ theme() === 'light' ? 'light_mode' : 'dark_mode' }}</mat-icon>
             </button>
-            <button class="hidden h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary-hover sm:flex">
+            <button class="app-premium-primary-btn hidden h-10 items-center gap-2 rounded-lg px-4 text-sm font-bold text-white transition-all sm:flex">
               <mat-icon class="text-[20px]">sync</mat-icon>
               <span>Sincronizar</span>
             </button>
-            <button class="size-10 flex items-center justify-center text-gray-400 hover:bg-white/5 hover:text-white rounded-lg border border-border-dark transition-colors">
+            <button class="app-premium-icon-btn size-10 flex items-center justify-center text-gray-400 rounded-lg transition-colors">
               <mat-icon>notifications</mat-icon>
             </button>
           </div>
@@ -226,11 +228,11 @@ export class LayoutComponent implements OnInit, OnDestroy {
 
     return {
       'fixed inset-0 z-50 w-full': mobile,
-      'relative z-20 border-r border-border-dark': !mobile,
+      'relative z-20': !mobile,
       'translate-x-0': mobile && open,
       '-translate-x-full pointer-events-none': mobile && !open,
       'w-64': !mobile && open,
-      'w-0 overflow-hidden border-r-0': !mobile && !open,
+      'w-0 overflow-hidden': !mobile && !open,
     };
   }
 

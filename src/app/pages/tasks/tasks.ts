@@ -25,9 +25,9 @@ interface DerivedTask {
   standalone: true,
   imports: [CommonModule, FormsModule, MatIconModule],
   template: `
-    <div class="p-8 max-w-[1200px] mx-auto w-full space-y-6">
+    <div class="p-8 max-w-[1200px] mx-auto w-full space-y-6 premium-page-shell">
       <!-- Header -->
-      <section class="rounded-2xl bg-gradient-to-br from-rose-500/20 via-surface-dark/90 to-orange-900/20 border border-rose-500/30 p-6 space-y-4 backdrop-blur-sm">
+      <section class="premium-page-hero rounded-2xl bg-gradient-to-br from-rose-500/20 via-surface-dark/90 to-orange-900/20 border border-rose-500/30 p-6 space-y-4 backdrop-blur-sm">
         <div class="flex items-center justify-between gap-4 flex-wrap">
           <div class="space-y-2">
             <h1 class="text-4xl font-black text-white">Tareas Detectadas</h1>
@@ -109,7 +109,7 @@ interface DerivedTask {
         } @else {
           <div class="space-y-3">
             @for (task of pagedTasks; track task.id) {
-              <article class="rounded-lg border border-border-dark p-4 space-y-3">
+              <article class="rounded-lg border border-border-dark bg-background-dark/40 p-4 space-y-3 hover:border-primary/35 hover:bg-background-dark/60 transition-all">
                 <div class="flex items-start justify-between gap-4">
                   <div class="min-w-0">
                     <p class="text-sm font-semibold text-white">{{ task.accion }}</p>
@@ -187,6 +187,8 @@ export class TasksComponent implements OnInit, OnDestroy {
     if (!isPlatformBrowser(this.platformId)) {
       return;
     }
+
+    this.state.ensureInitialized();
 
     this.transcriptions$
       .pipe(takeUntil(this.destroy$))
