@@ -9,6 +9,6 @@ export const environment = {
   socketUrl: 'ws://18.223.30.63:5000',
   // API keys
   geminiApiKey: '',
-  openRouterApiKey: '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',
+  openRouterApiKey: '',
   openRouterModel: 'google/gemini-2.5-flash',
 };
