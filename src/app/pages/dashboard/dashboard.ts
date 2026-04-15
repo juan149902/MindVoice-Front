@@ -192,6 +192,10 @@ const STAT_CARDS: StatCard[] = [
                   <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
                   {{ t('dashboard.subtitle') }}
                 </p>
+                <p class="text-xs text-gray-400 flex items-center gap-1.5 mt-0.5">
+                  <mat-icon class="text-[13px] text-violet-400">calendar_today</mat-icon>
+                  {{ todayLabel }}
+                </p>
               </div>
             </div>
           </div>
@@ -741,6 +745,9 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   private lineChart: Chart | null = null;
 
   username = 'Usuario';
+  readonly todayLabel = new Date().toLocaleDateString('es-MX', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  }).replace(/^\w/, c => c.toUpperCase());
   loading$ = this.state.loading$;
   error$ = this.state.error$;
   
