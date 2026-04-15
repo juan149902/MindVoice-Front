@@ -394,7 +394,7 @@ const STAT_CARDS: StatCard[] = [
                         <div class="flex items-center gap-3 mt-2">
                           <span class="text-xs text-gray-500 flex items-center gap-1">
                             <mat-icon class="text-xs">schedule</mat-icon>
-                            {{ transcription.createdAt ? (transcription.createdAt | date: 'dd/MM HH:mm') : t('common.noDate') }}
+                            {{ dateFromEntity(transcription) ? (dateFromEntity(transcription) | date: 'dd/MM/yy HH:mm') : t('common.noDate') }}
                           </span>
                         </div>
                       </div>
@@ -464,9 +464,9 @@ const STAT_CARDS: StatCard[] = [
                             </span>
                           }
                           <span class="text-xs text-gray-500 flex items-center gap-1 ml-auto">
-                            <mat-icon class="text-xs">schedule</mat-icon>
-                            {{ analysis.createdAt ? (analysis.createdAt | date: 'dd/MM HH:mm') : t('common.noDate') }}
-                          </span>
+                             <mat-icon class="text-xs">schedule</mat-icon>
+                             {{ dateFromEntity(analysis) ? (dateFromEntity(analysis) | date: 'dd/MM/yy HH:mm') : t('common.noDate') }}
+                           </span>
                         </div>
                       </div>
                     </div>
@@ -906,6 +906,21 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
     }
     window.removeEventListener('focus', this.handleWindowFocus);
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+  }
+
+  /** Extrae la fecha de un ObjectId de MongoDB o de un campo createdAt/created_at */
+  dateFromEntity(entity: { _id?: string; createdAt?: string; created_at?: string }): Date | null {
+    // Prefer explicit date fields first
+    const explicit = entity.createdAt || entity.created_at;
+    if (explicit) {
+      const d = new Date(explicit);
+      if (!isNaN(d.getTime())) return d;
+    }
+    // Fall back to MongoDB ObjectId timestamp (first 8 hex chars = Unix seconds)
+    if (entity._id && /^[0-9a-f]{24}$/i.test(entity._id)) {
+      return new Date(parseInt(entity._id.substring(0, 8), 16) * 1000);
+    }
+    return null;
   }
 
   private attachThemeObserver(): void {
