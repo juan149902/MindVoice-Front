@@ -72,6 +72,11 @@ export class AnalysisArtifactsService {
   }
 
   private buildTitle(fileName: string, analysis: AiAnalysisEntity): string {
+    // Use backend title if available
+    const backendTitle = (analysis.result as Record<string, any>)['title'];
+    if (typeof backendTitle === 'string' && backendTitle.trim()) {
+      return `Informe IA - ${backendTitle.trim().slice(0, 60)}`;
+    }
     const baseName = fileName.replace(/\.[^.]+$/, '').trim();
     const shortSummary = analysis.result.resumen?.trim().slice(0, 60) || '';
     if (shortSummary.length > 0) {
@@ -81,6 +86,7 @@ export class AnalysisArtifactsService {
   }
 
   private buildStructuredDocumentContent(input: CreateArtifactsInput, title: string): Record<string, unknown> {
+    const r = input.analysis.result as Record<string, any>;
     const actions = (input.analysis.result.acciones || []).map((item, index) => ({
       orden: index + 1,
       accion: item.accion,
@@ -101,11 +107,16 @@ export class AnalysisArtifactsService {
       },
       generatedAt: new Date().toISOString(),
       sections: {
-        executiveSummary: input.analysis.result.resumen || 'Sin resumen disponible.',
+        executiveSummary: Array.isArray(r['executive_summary'])
+          ? r['executive_summary'].join('\n\n')
+          : (input.analysis.result.resumen || 'Sin resumen disponible.'),
+        reportReadyText: typeof r['report_ready_text'] === 'string' ? r['report_ready_text'] : '',
+        keyInsights: Array.isArray(r['key_insights']) ? r['key_insights'] : [],
         keyTopics: topics,
         actionPlan: actions,
         sentiment,
         transcript: input.transcriptionText,
+        semanticKeywords: Array.isArray(r['semantic_keywords']) ? r['semantic_keywords'] : [],
       },
       markdown: this.buildMarkdown(input, topics, actions, sentiment),
     };
@@ -145,6 +156,80 @@ export class AnalysisArtifactsService {
   }
 
   private buildCanvas(title: string, analysis: AiAnalysisEntity): MindmapCanvasPayload {
+    // Use backend-generated mind_map_nodes if available
+    const backendNodes = (analysis.result as Record<string, any>)['mind_map_nodes'];
+    if (Array.isArray(backendNodes) && backendNodes.length > 0) {
+      return this.buildCanvasFromBackendNodes(title, backendNodes);
+    }
+    return this.buildCanvasFromAnalysis(title, analysis);
+  }
+
+  private buildCanvasFromBackendNodes(
+    title: string,
+    backendNodes: { id: string; label: string; parentId: string | null }[],
+  ): MindmapCanvasPayload {
+    const nodes: MindmapCanvasNodePayload[] = [];
+    const edges: MindmapCanvasPayload['edges'] = [];
+
+    // Build tree levels for positioning
+    const rootNodes = backendNodes.filter(n => !n.parentId);
+    const childMap = new Map<string, typeof backendNodes>();
+    backendNodes.forEach(n => {
+      if (n.parentId) {
+        const siblings = childMap.get(n.parentId) || [];
+        siblings.push(n);
+        childMap.set(n.parentId, siblings);
+      }
+    });
+
+    // Position root(s) at top center
+    rootNodes.forEach((root, ri) => {
+      nodes.push({
+        id: root.id,
+        label: this.truncate(root.label, 70),
+        x: 580 + ri * 300,
+        y: 80,
+        w: 260,
+        h: 62,
+        styleClass: 'node-root',
+      });
+
+      // Position level-1 children
+      const l1Children = childMap.get(root.id) || [];
+      const l1StartX = 580 + ri * 300 - (l1Children.length - 1) * 150;
+      l1Children.forEach((child, ci) => {
+        nodes.push({
+          id: child.id,
+          label: this.truncate(child.label, 60),
+          x: l1StartX + ci * 300,
+          y: 220,
+          w: 200,
+          h: 56,
+          styleClass: 'node-topics',
+        });
+        edges.push({ id: `e-${root.id}-${child.id}`, from: root.id, to: child.id, curveOffsetX: 0, curveOffsetY: 0 });
+
+        // Position level-2 children
+        const l2Children = childMap.get(child.id) || [];
+        l2Children.forEach((grandChild, gi) => {
+          nodes.push({
+            id: grandChild.id,
+            label: this.truncate(grandChild.label, 55),
+            x: l1StartX + ci * 300 - 60 + gi * 130,
+            y: 360 + gi * 70,
+            w: 190,
+            h: 50,
+            styleClass: 'node-topic-item',
+          });
+          edges.push({ id: `e-${child.id}-${grandChild.id}`, from: child.id, to: grandChild.id, curveOffsetX: 0, curveOffsetY: 0 });
+        });
+      });
+    });
+
+    return { nodes, edges };
+  }
+
+  private buildCanvasFromAnalysis(title: string, analysis: AiAnalysisEntity): MindmapCanvasPayload {
     const nodes: MindmapCanvasNodePayload[] = [];
     const edges: MindmapCanvasPayload['edges'] = [];
 

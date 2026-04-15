@@ -115,6 +115,7 @@ export interface MindvoiceAnalyzeResponse {
   edited_text?: string;
   key_insights?: string[];
   task_list?: MindvoiceTask[];
+  mind_map_nodes?: { id: string; label: string; parentId: string | null }[];
   tags?: string[];
   semantic_keywords?: string[];
   report_ready_text?: string;

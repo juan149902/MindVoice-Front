@@ -525,24 +525,31 @@ export class RecordingsComponent implements OnInit, OnDestroy {
           const audioTranscriptions = (transcriptions || []).filter((t: TranscriptionEntity) => t.audioId === audio._id);
           const transcriptionIds = new Set(audioTranscriptions.map(t => t._id).filter(Boolean));
 
-          // Link analyses through transcriptions, OR directly if they reference this audio's transcriptions
+          // Link analyses through transcriptions with multiple fallback strategies
           const audioAnalyses = (analyses || []).filter((a: AiAnalysisEntity) => {
-            // Primary: link through transcriptionId → transcription.audioId
+            // Primary: link through transcriptionId → audio's transcription set
             if (a.transcriptionId && transcriptionIds.has(a.transcriptionId)) {
               return true;
             }
-            // Secondary: if analysis has transcriptionId, find that transcription and check its audioId
+            // Secondary: find the analysis's transcription globally and check its audioId
             if (a.transcriptionId) {
               const trans = (transcriptions || []).find((t: TranscriptionEntity) => t._id === a.transcriptionId);
-              return trans?.audioId === audio._id;
+              if (trans?.audioId === audio._id) {
+                return true;
+              }
             }
-            // Tertiary: analysis has no transcriptionId — try matching by result.transcription text vs audio.transcription
-            if (!a.transcriptionId && audio.transcription) {
-              const raw = a.result as unknown as Record<string, unknown>;
-              const resultTranscription = typeof raw?.['transcription'] === 'string'
-                ? raw['transcription'].trim()
-                : (typeof raw?.['_originalTranscription'] === 'string' ? raw['_originalTranscription'].trim() : '');
-              if (resultTranscription && audio.transcription.trim() === resultTranscription) {
+            // Tertiary: match by transcription text content
+            const raw = a.result as unknown as Record<string, unknown>;
+            const resultTranscription = typeof raw?.['transcription'] === 'string'
+              ? raw['transcription'].trim()
+              : (typeof raw?.['_originalTranscription'] === 'string' ? raw['_originalTranscription'].trim() : '');
+            if (resultTranscription) {
+              // Match against audio.transcription field
+              if (audio.transcription && audio.transcription.trim() === resultTranscription) {
+                return true;
+              }
+              // Match against any of the audio's transcription texts
+              if (audioTranscriptions.some(t => t.text?.trim() === resultTranscription)) {
                 return true;
               }
             }
@@ -1220,15 +1227,29 @@ export class RecordingsComponent implements OnInit, OnDestroy {
       result: this.buildAnalysisResult(finalResult, rawAiResult),
     }));
 
-    await firstValueFrom(this.analysisArtifacts.createProfessionalArtifacts({
-      audioId,
-      audioFileName: fileName,
-      transcriptionId: transcription._id,
-      transcriptionText,
-      analysis,
-    }));
+    // Create mindmap artifact (non-blocking — don't fail the whole flow if this errors)
+    try {
+      await firstValueFrom(this.analysisArtifacts.createProfessionalArtifacts({
+        audioId,
+        audioFileName: fileName,
+        transcriptionId: transcription._id,
+        transcriptionText,
+        analysis,
+      }));
+    } catch (artifactError) {
+      console.warn('[Recordings] Mindmap artifact creation failed (non-critical):', artifactError);
+    }
 
+    // Refresh data from backend to ensure everything is in sync
     this.state.refreshAllData();
+
+    // After analysis is complete, show the document in the editor
+    setTimeout(() => {
+      const title = (analysis.result as Record<string, any>)['title'] || fileName;
+      this.openEditorForAnalysis(analysis, transcriptionText, title);
+      this.cdr.markForCheck();
+    }, 500);
+
     return { analysis, transcriptionText };
   }
 
@@ -1240,16 +1261,20 @@ export class RecordingsComponent implements OnInit, OnDestroy {
   }
 
   private buildAnalysisResult(aiResult: MindvoiceAnalyzeResponse, fallback: MindvoiceAnalyzeResponse): AnalysisResult {
-    const summary = aiResult.executive_summary?.join('\n\n')
-      || aiResult.report_ready_text
-      || fallback.executive_summary?.join('\n\n')
-      || fallback.report_ready_text
+    const r = aiResult;
+    const fb = fallback;
+
+    const summary = r.executive_summary?.join('\n\n')
+      || r.report_ready_text
+      || fb.executive_summary?.join('\n\n')
+      || fb.report_ready_text
       || 'Analisis generado';
-    const themes = (aiResult.tags && aiResult.tags.length > 0) ? aiResult.tags : (fallback.tags || []);
-    const tasks = (aiResult.task_list && aiResult.task_list.length > 0) ? aiResult.task_list : (fallback.task_list || []);
-    const sentiment = aiResult.sentiment || fallback.sentiment;
+    const themes = (r.tags && r.tags.length > 0) ? r.tags : (fb.tags || []);
+    const tasks = (r.task_list && r.task_list.length > 0) ? r.task_list : (fb.task_list || []);
+    const sentiment = r.sentiment || fb.sentiment;
 
     return {
+      // Standard frontend fields
       resumen: summary,
       temas: themes,
       acciones: tasks.map((task) => ({
@@ -1257,6 +1282,20 @@ export class RecordingsComponent implements OnInit, OnDestroy {
         prioridad: task.priority || 'media',
       })).filter((item) => item.accion.trim().length > 0),
       sentimiento: sentiment,
+      // Preserve ALL rich backend fields for document display and PDF generation
+      title: r.title || fb.title,
+      _originalTranscription: r.transcription || fb.transcription,
+      edited_text: r.edited_text || fb.edited_text,
+      executive_summary: r.executive_summary?.length ? r.executive_summary : fb.executive_summary,
+      key_insights: r.key_insights?.length ? r.key_insights : fb.key_insights,
+      task_list: r.task_list?.length ? r.task_list as { task: string; priority: string }[] : fb.task_list as { task: string; priority: string }[] | undefined,
+      mind_map_nodes: r.mind_map_nodes?.length ? r.mind_map_nodes as { id: string; label: string; parentId: string | null }[] : fb.mind_map_nodes as { id: string; label: string; parentId: string | null }[] | undefined,
+      transcription_with_timestamps: r.transcription_with_timestamps?.length
+        ? r.transcription_with_timestamps as { start: string; end: string; text: string }[]
+        : fb.transcription_with_timestamps as { start: string; end: string; text: string }[] | undefined,
+      _tags: r.tags?.length ? r.tags : fb.tags,
+      semantic_keywords: r.semantic_keywords?.length ? r.semantic_keywords : fb.semantic_keywords,
+      report_ready_text: r.report_ready_text || fb.report_ready_text,
     };
   }
 
