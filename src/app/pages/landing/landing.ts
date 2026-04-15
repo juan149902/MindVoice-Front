@@ -84,8 +84,8 @@ import { CommonModule } from '@angular/common';
                 <a routerLink="/auth" class="cta-primary rounded-2xl px-7 py-3.5 text-white font-extrabold hover:scale-[1.03] transition-all">
                    Probar ahora
                 </a>
-                <a href="#features" class="cta-secondary rounded-2xl px-7 py-3.5 font-semibold transition-all" (click)="scrollToFeatures($event)">
-                  Ver demo →
+                <a href="#pricing" class="cta-secondary rounded-2xl px-7 py-3.5 font-semibold transition-all" (click)="scrollToPricing($event)">
+                  Ver planes →
                 </a>
               </div>
               <div class="trust-row">
@@ -855,6 +855,15 @@ export class LandingComponent implements OnInit, AfterViewInit, OnDestroy {
     event.preventDefault();
     if (!isPlatformBrowser(this.platformId)) return;
     const el = document.getElementById('features');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  scrollToPricing(event: Event) {
+    event.preventDefault();
+    if (!isPlatformBrowser(this.platformId)) return;
+    const el = document.getElementById('pricing');
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
