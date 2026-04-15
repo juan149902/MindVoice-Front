@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { forkJoin, map, Observable, of, switchMap, throwError, merge } from 'rxjs';
+import { catchError, combineLatest, forkJoin, map, Observable, of, startWith, switchMap, throwError } from 'rxjs';
 import { ApiEntity } from '../models/api.models';
 import { ResourceApiService } from './resource-api.service';
 import { TokenStorageService } from './token-storage.service';
@@ -95,22 +95,9 @@ export class MindmapWorkflowService {
       mindmaps: this.listMindmaps(),
       documents: this.listDocuments(),
     }).pipe(
-      map(({ mindmaps, documents }) => {
-        const userId = this.tokenStorage.getUserId();
-        if (!userId) {
-          return [];
-        }
-
-        const userDocuments = documents.filter((document) => document.userId === userId);
-        const documentIds = new Set(
-          userDocuments
-            .filter((document) => !!document._id)
-            .map((document) => document._id as string),
-        );
-
-        const userMindmaps = mindmaps.filter((mindmap) => documentIds.has(mindmap.documentId));
-        return this.mergeWorkspaceItems(userMindmaps, userDocuments);
-      }),
+      map(({ mindmaps, documents }) =>
+        this.buildWorkspaceItemsForUser(mindmaps, documents),
+      ),
     );
   }
 
@@ -120,54 +107,48 @@ export class MindmapWorkflowService {
       return of([]);
     }
 
-    const mindmaps$ = this.listMindmaps();
-    const documents$ = this.listDocuments();
+    // Each stream catches its own errors so one failure doesn't kill the other.
+    const mindmaps$ = this.listMindmaps().pipe(
+      catchError((err) => {
+        console.error('[MindmapWorkflow] Error loading mindmaps:', err);
+        return of([] as MindmapEntity[]);
+      }),
+      startWith([] as MindmapEntity[]),
+    );
+    const documents$ = this.listDocuments().pipe(
+      catchError((err) => {
+        console.error('[MindmapWorkflow] Error loading documents:', err);
+        return of([] as DocumentEntity[]);
+      }),
+      startWith([] as DocumentEntity[]),
+    );
 
-    return merge(
-      mindmaps$.pipe(
-        map((mindmaps) => {
-          const documents = (globalThis as any).__lastDocuments ?? [];
-          return this.buildProgressiveItems(userId, mindmaps, documents);
-        }),
-      ),
-      documents$.pipe(
-        map((documents) => {
-          (globalThis as any).__lastDocuments = documents;
-          const mindmaps = (globalThis as any).__lastMindmaps ?? [];
-          return this.buildProgressiveItems(userId, mindmaps, documents);
-        }),
+    return combineLatest([mindmaps$, documents$]).pipe(
+      map(([mindmaps, documents]) =>
+        this.buildWorkspaceItemsForUser(mindmaps, documents),
       ),
     );
   }
 
-  private buildProgressiveItems(
-    userId: string,
+  private buildWorkspaceItemsForUser(
     mindmaps: MindmapEntity[],
     documents: DocumentEntity[],
   ): MindmapWorkspaceItem[] {
-    (globalThis as any).__lastMindmaps = mindmaps;
-    (globalThis as any).__lastDocuments = documents;
-
-    const userDocuments = documents.filter((document) => document.userId === userId);
-    const documentIds = new Set(
-      userDocuments
-        .filter((document) => !!document._id)
-        .map((document) => document._id as string),
-    );
-
-    const userMindmaps = mindmaps.filter((mindmap) => documentIds.has(mindmap.documentId));
-    return this.mergeWorkspaceItems(userMindmaps, userDocuments);
+    // The backend already auth-filters by JWT, so every mindmap returned
+    // belongs to the current user.  No client-side userId filtering needed.
+    return this.mergeWorkspaceItems(mindmaps, documents);
   }
 
   getWorkspaceItemByMindmapId(mindmapId: string): Observable<MindmapWorkspaceItem> {
     return this.resourceApi.getById<MindmapEntity>('mindmaps', mindmapId).pipe(
       switchMap((mindmap) => {
         if (!mindmap.documentId) {
-          return throwError(() => new Error('El mapa mental no incluye documentId.'));
+          return of(this.buildWorkspaceItem(mindmap, null));
         }
 
         return this.resourceApi.getById<DocumentEntity>('documents', mindmap.documentId).pipe(
           map((document) => this.buildWorkspaceItem(mindmap, document)),
+          catchError(() => of(this.buildWorkspaceItem(mindmap, null))),
         );
       }),
     );

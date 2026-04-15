@@ -7,7 +7,7 @@ import { API_BASE_URL } from '../config/api.config';
 export class ApiHttpService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = inject(API_BASE_URL).replace(/\/$/, '');
-  private readonly REQUEST_TIMEOUT = 10000; // 10 seconds
+  private readonly REQUEST_TIMEOUT = 15000; // 15 seconds for normal requests
   private readonly LONG_REQUEST_TIMEOUT = 180000; // 3 minutes for IA audio analysis
   private readonly MEDIUM_REQUEST_TIMEOUT = 60000; // 1 minute for IA text analysis
   private readonly RETRY_ATTEMPTS = 1;

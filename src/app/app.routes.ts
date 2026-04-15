@@ -15,6 +15,12 @@ export const routes: Routes = [
     path: 'auth',
     loadComponent: () => import('./pages/auth/auth').then((m) => m.AuthComponent),
   },
+  // Shared mind-map route — NO layout wrapper (clean canvas-only view for guests)
+  {
+    path: 'mind-maps/shared',
+    loadComponent: () => import('./pages/mind-maps/mind-maps').then((m) => m.MindMapsComponent),
+    canActivate: [mindmapAccessGuard],
+  },
   {
     path: '',
     loadComponent: () => import('./layout/layout').then((m) => m.LayoutComponent),
@@ -26,8 +32,8 @@ export const routes: Routes = [
       },
       {
         path: 'ai-analysis',
-        loadComponent: () => import('./pages/ai-analysis/ai-analysis').then((m) => m.AiAnalysisComponent),
-        canActivate: [authGuard],
+        redirectTo: 'recordings',
+        pathMatch: 'full',
       },
       {
         path: 'recordings',
@@ -41,8 +47,8 @@ export const routes: Routes = [
       },
       {
         path: 'summaries',
-        loadComponent: () => import('./pages/summaries/summaries').then((m) => m.SummariesComponent),
-        canActivate: [authGuard],
+        redirectTo: 'recordings',
+        pathMatch: 'full',
       },
       {
         path: 'tasks',

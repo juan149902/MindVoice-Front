@@ -52,23 +52,33 @@ export class ResourceApiService {
 
   private normalizeListResponse<T extends ApiEntity>(resource: ResourceName, response: unknown): T[] {
     if (Array.isArray(response)) {
+      console.log(`[ResourceApi] ${resource}: response is array (${response.length} items)`);
       return response as T[];
     }
 
     if (!response || typeof response !== 'object') {
+      console.warn(`[ResourceApi] ${resource}: response is not an object, returning []`);
       return [];
     }
 
     const record = response as Record<string, unknown>;
-    for (const key of this.getCandidateKeys(resource)) {
+    const keys = this.getCandidateKeys(resource);
+    for (const key of keys) {
       const value = record[key];
       if (Array.isArray(value)) {
+        console.log(`[ResourceApi] ${resource}: found array under key '${key}' (${value.length} items)`);
         return value as T[];
       }
     }
 
     const firstArray = Object.values(record).find((value) => Array.isArray(value));
-    return Array.isArray(firstArray) ? (firstArray as T[]) : [];
+    if (Array.isArray(firstArray)) {
+      console.log(`[ResourceApi] ${resource}: using first array found in response (${firstArray.length} items)`);
+      return firstArray as T[];
+    }
+
+    console.warn(`[ResourceApi] ${resource}: no array found in response. Keys in response:`, Object.keys(record));
+    return [];
   }
 
   private normalizeEntityResponse<T extends ApiEntity>(resource: ResourceName, response: unknown): T {

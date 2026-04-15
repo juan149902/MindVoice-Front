@@ -1,7 +1,7 @@
 export const environment = {
   production: true,
-  apiUrl: 'https://mindvoice-ai.com',
-  socketUrl: 'wss://mindvoice-ai.com',
+  apiUrl: 'http://18.223.30.63:5000',
+  socketUrl: 'ws://18.223.30.63:5000',
 
   geminiApiKey: '',
   openRouterApiKey: '',

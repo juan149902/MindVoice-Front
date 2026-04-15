@@ -8,6 +8,7 @@ import {
 } from '../../core/services/audio-workflow.service';
 import { TokenStorageService } from '../../core/services/token-storage.service';
 import { StateManagementService } from '../../core/services/state-management.service';
+import { AppPreferencesService } from '../../core/services/app-preferences.service';
 import { Chart, registerables } from 'chart.js';
 
 Chart.register(...registerables);
@@ -54,7 +55,7 @@ interface DashboardChartTheme {
 const STAT_CARDS: StatCard[] = [
   {
     key: 'audios',
-    label: 'Audios',
+    label: 'dashboard.audios',
     icon: 'audio_file',
     bgColor: 'bg-violet-500/10',
     bgColorHover: 'hover:bg-violet-500/20',
@@ -72,7 +73,7 @@ const STAT_CARDS: StatCard[] = [
   },
   {
     key: 'transcriptions',
-    label: 'Transcripciones',
+    label: 'dashboard.transcriptions',
     icon: 'text_snippet',
     bgColor: 'bg-emerald-500/10',
     bgColorHover: 'hover:bg-emerald-500/20',
@@ -90,7 +91,7 @@ const STAT_CARDS: StatCard[] = [
   },
   {
     key: 'analyses',
-    label: 'Análisis IA',
+    label: 'dashboard.aiAnalyses',
     icon: 'psychology',
     bgColor: 'bg-amber-500/10',
     bgColorHover: 'hover:bg-amber-500/20',
@@ -108,7 +109,7 @@ const STAT_CARDS: StatCard[] = [
   },
   {
     key: 'folders',
-    label: 'Carpetas',
+    label: 'dashboard.folders',
     icon: 'folder',
     bgColor: 'bg-blue-500/10',
     bgColorHover: 'hover:bg-blue-500/20',
@@ -126,7 +127,7 @@ const STAT_CARDS: StatCard[] = [
   },
   {
     key: 'documents',
-    label: 'Documentos',
+    label: 'dashboard.documents',
     icon: 'description',
     bgColor: 'bg-rose-500/10',
     bgColorHover: 'hover:bg-rose-500/20',
@@ -144,7 +145,7 @@ const STAT_CARDS: StatCard[] = [
   },
   {
     key: 'tags',
-    label: 'Etiquetas',
+    label: 'dashboard.tags',
     icon: 'label',
     bgColor: 'bg-cyan-500/10',
     bgColorHover: 'hover:bg-cyan-500/20',
@@ -189,7 +190,7 @@ const STAT_CARDS: StatCard[] = [
                 </h2>
                 <p class="dashboard-subtitle text-sm md:text-base flex items-center gap-2">
                   <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-                  Panel operativo conectado en tiempo real
+                  {{ t('dashboard.subtitle') }}
                 </p>
               </div>
             </div>
@@ -204,7 +205,7 @@ const STAT_CARDS: StatCard[] = [
               <div class="absolute inset-0 bg-gradient-to-r from-violet-500/0 via-violet-500/10 to-violet-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
               <span class="dashboard-refresh-btn-label relative inline-flex items-center gap-2 text-sm font-semibold">
                 <mat-icon class="text-lg transition-transform duration-500" [class.animate-spin]="(loading$ | async)">refresh</mat-icon>
-                {{ (loading$ | async) ? 'Actualizando...' : 'Actualizar' }}
+                {{ (loading$ | async) ? t('common.updating') : t('common.update') }}
               </span>
             </button>
           </div>
@@ -253,7 +254,7 @@ const STAT_CARDS: StatCard[] = [
                 </div>
                 <div class="flex items-center gap-1 text-xs text-gray-500">
                   <span class="w-1.5 h-1.5 rounded-full" [class]="card.dotColor + ' animate-pulse'"></span>
-                  <span>En vivo</span>
+                  <span>{{ t('dashboard.live') }}</span>
                 </div>
               </div>
 
@@ -261,7 +262,7 @@ const STAT_CARDS: StatCard[] = [
                 <p class="text-4xl font-black text-white tabular-nums tracking-tight">
                   {{ animatedMetrics[card.key] }}
                 </p>
-                <p class="text-sm text-gray-400">{{ card.label }}</p>
+                <p class="text-sm text-gray-400">{{ t(card.label) }}</p>
               </div>
 
               <!-- Progress bar -->
@@ -286,10 +287,10 @@ const STAT_CARDS: StatCard[] = [
             <div class="flex items-center justify-between mb-6">
               <h3 class="text-lg font-bold text-white flex items-center gap-2">
                 <span class="w-1 h-6 rounded-full bg-gradient-to-b from-violet-500 to-cyan-500"></span>
-                Distribución de Contenido
+                {{ t('dashboard.contentDistribution') }}
               </h3>
               <div class="flex items-center gap-2 text-xs text-gray-400">
-                <span class="dashboard-chip px-2 py-1 rounded-full border">Total: {{ getTotalMetrics() }}</span>
+                <span class="dashboard-chip px-2 py-1 rounded-full border">{{ t('dashboard.total') }} {{ getTotalMetrics() }}</span>
               </div>
             </div>
             <div class="relative h-[320px] md:h-[340px] flex items-center justify-center">
@@ -317,7 +318,7 @@ const STAT_CARDS: StatCard[] = [
             <div class="flex items-center justify-between mb-6">
               <h3 class="text-lg font-bold text-white flex items-center gap-2">
                 <span class="w-1 h-6 rounded-full bg-gradient-to-b from-emerald-500 to-teal-500"></span>
-                Resumen de Métricas
+                {{ t('dashboard.metricsSummary') }}
               </h3>
             </div>
             <div class="relative h-[320px] md:h-[340px] flex items-center justify-center">
@@ -348,21 +349,21 @@ const STAT_CARDS: StatCard[] = [
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-bold text-white flex items-center gap-2">
                 <span class="w-1 h-6 rounded-full bg-gradient-to-b from-cyan-500 to-blue-500"></span>
-                Transcripciones Recientes
+                {{ t('dashboard.recentTranscriptions') }}
               </h3>
               <span class="dashboard-chip text-xs px-2 py-1 rounded-full border">
-                Últimas 5
+                {{ t('dashboard.last5') }}
               </span>
             </div>
 
-            @if ((loading) && (recentTranscriptions$ | async)?.length === 0) {
+            @if ((loading) && (recentTranscriptions$| async)?.length === 0) {
               <div class="flex items-center justify-center py-12">
                 <div class="flex flex-col items-center gap-3">
                   <div class="relative">
                     <div class="w-12 h-12 border-4 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin"></div>
                     <mat-icon class="absolute inset-0 m-auto text-cyan-400 text-xl">text_snippet</mat-icon>
                   </div>
-                  <p class="text-gray-400 text-sm">Cargando transcripciones...</p>
+                  <p class="text-gray-400 text-sm">{{ t('dashboard.loadingTranscriptions') }}</p>
                 </div>
               </div>
             } @else if ((recentTranscriptions$ | async)?.length === 0) {
@@ -370,8 +371,8 @@ const STAT_CARDS: StatCard[] = [
                 <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/5 flex items-center justify-center">
                   <mat-icon class="text-3xl text-gray-600">text_snippet</mat-icon>
                 </div>
-                <p class="text-gray-400">No hay transcripciones registradas.</p>
-                <p class="text-gray-500 text-sm mt-1">Sube un audio para comenzar</p>
+                <p class="text-gray-400">{{ t('dashboard.noTranscriptions') }}</p>
+                <p class="text-gray-500 text-sm mt-1">{{ t('dashboard.uploadToStart') }}</p>
               </div>
             } @else {
               <div class="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
@@ -389,7 +390,7 @@ const STAT_CARDS: StatCard[] = [
                         <div class="flex items-center gap-3 mt-2">
                           <span class="text-xs text-gray-500 flex items-center gap-1">
                             <mat-icon class="text-xs">schedule</mat-icon>
-                            {{ transcription.createdAt ? (transcription.createdAt | date: 'dd/MM HH:mm') : 'Sin fecha' }}
+                            {{ transcription.createdAt ? (transcription.createdAt | date: 'dd/MM HH:mm') : t('common.noDate') }}
                           </span>
                         </div>
                       </div>
@@ -408,21 +409,21 @@ const STAT_CARDS: StatCard[] = [
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-lg font-bold text-white flex items-center gap-2">
                 <span class="w-1 h-6 rounded-full bg-gradient-to-b from-amber-500 to-orange-500"></span>
-                Análisis IA Recientes
+                {{ t('dashboard.recentAnalyses') }}
               </h3>
               <span class="dashboard-chip text-xs px-2 py-1 rounded-full border">
-                Últimos 5
+                {{ t('dashboard.last5') }}
               </span>
             </div>
 
-            @if ((loading) && (recentAnalyses$ | async)?.length === 0) {
+            @if ((loading) && (recentAnalyses$| async)?.length === 0) {
               <div class="flex items-center justify-center py-12">
                 <div class="flex flex-col items-center gap-3">
                   <div class="relative">
                     <div class="w-12 h-12 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"></div>
                     <mat-icon class="absolute inset-0 m-auto text-amber-400 text-xl">psychology</mat-icon>
                   </div>
-                  <p class="text-gray-400 text-sm">Cargando análisis...</p>
+                  <p class="text-gray-400 text-sm">{{ t('dashboard.loadingAnalyses') }}</p>
                 </div>
               </div>
             } @else if ((recentAnalyses$ | async)?.length === 0) {
@@ -430,8 +431,8 @@ const STAT_CARDS: StatCard[] = [
                 <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/5 flex items-center justify-center">
                   <mat-icon class="text-3xl text-gray-600">psychology</mat-icon>
                 </div>
-                <p class="text-gray-400">No hay análisis guardados.</p>
-                <p class="text-gray-500 text-sm mt-1">Genera análisis con IA para verlos aquí</p>
+                <p class="text-gray-400">{{ t('dashboard.noAnalyses') }}</p>
+                <p class="text-gray-500 text-sm mt-1">{{ t('dashboard.generateAnalyses') }}</p>
               </div>
             } @else {
               <div class="space-y-3 max-h-[320px] overflow-y-auto pr-2 custom-scrollbar">
@@ -447,10 +448,10 @@ const STAT_CARDS: StatCard[] = [
                       <div class="flex-1 min-w-0">
                         <p class="text-sm text-gray-300 line-clamp-2 leading-relaxed">{{ analysis.result.resumen }}</p>
                         <div class="flex items-center gap-3 mt-2 flex-wrap">
-                          @if (analysis.result.acciones.length) {
+                          @if (analysis.result.acciones?.length) {
                             <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                               <mat-icon class="text-xs">task_alt</mat-icon>
-                              {{ analysis.result.acciones.length }} acciones
+                              {{ analysis.result.acciones.length }} {{ t('dashboard.actions') }}
                             </span>
                           }
                           @if (analysis.result.sentimiento) {
@@ -460,7 +461,7 @@ const STAT_CARDS: StatCard[] = [
                           }
                           <span class="text-xs text-gray-500 flex items-center gap-1 ml-auto">
                             <mat-icon class="text-xs">schedule</mat-icon>
-                            {{ analysis.createdAt ? (analysis.createdAt | date: 'dd/MM HH:mm') : 'Sin fecha' }}
+                            {{ analysis.createdAt ? (analysis.createdAt | date: 'dd/MM HH:mm') : t('common.noDate') }}
                           </span>
                         </div>
                       </div>
@@ -480,17 +481,17 @@ const STAT_CARDS: StatCard[] = [
           <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
             <h3 class="text-lg font-bold text-white flex items-center gap-2">
               <span class="w-1 h-6 rounded-full bg-gradient-to-b from-rose-500 to-purple-500"></span>
-              Tendencias de Contenido
+              {{ t('dashboard.contentTrends') }}
             </h3>
             <div class="flex items-center gap-2">
               <span class="flex items-center gap-1 text-xs text-violet-400">
-                <span class="w-2 h-2 rounded-full bg-violet-500"></span> Audios
+                <span class="w-2 h-2 rounded-full bg-violet-500"></span> {{ t('dashboard.audios') }}
               </span>
               <span class="flex items-center gap-1 text-xs text-emerald-400">
-                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Transcripciones
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> {{ t('dashboard.transcriptions') }}
               </span>
               <span class="flex items-center gap-1 text-xs text-amber-400">
-                <span class="w-2 h-2 rounded-full bg-amber-500"></span> Análisis
+                <span class="w-2 h-2 rounded-full bg-amber-500"></span> {{ t('dashboard.analyses') }}
               </span>
             </div>
           </div>
@@ -539,9 +540,9 @@ const STAT_CARDS: StatCard[] = [
     }
 
     :host-context(.theme-light) {
-      --dashboard-panel-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(245, 241, 255, 0.94));
-      --dashboard-panel-border: rgba(167, 139, 250, 0.22);
-      --dashboard-panel-shadow: 0 18px 36px rgba(76, 29, 149, 0.12);
+      --dashboard-panel-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(246, 242, 255, 0.96));
+      --dashboard-panel-border: rgba(124, 58, 237, 0.28);
+      --dashboard-panel-shadow: 0 4px 20px rgba(76, 29, 149, 0.14), 0 1px 4px rgba(76, 29, 149, 0.08);
       --dashboard-hero-bg: linear-gradient(125deg, rgba(255, 255, 255, 0.98), rgba(246, 242, 255, 0.96), rgba(238, 248, 255, 0.94));
       --dashboard-muted-text: #64748b;
       --dashboard-chip-bg: rgba(124, 58, 237, 0.08);
@@ -605,6 +606,8 @@ const STAT_CARDS: StatCard[] = [
     .dashboard-panel,
     .dashboard-stat-card {
       background: var(--dashboard-panel-bg);
+      border-width: 1px;
+      border-style: solid;
       border-color: var(--dashboard-panel-border) !important;
       box-shadow: var(--dashboard-panel-shadow);
     }
@@ -730,6 +733,7 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly state = inject(StateManagementService);
   private readonly tokenStorage = inject(TokenStorageService);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly preferences = inject(AppPreferencesService);
   private readonly destroy$ = new Subject<void>();
 
   private doughnutChart: Chart | null = null;
@@ -775,6 +779,10 @@ export class DashboardComponent implements OnInit, AfterViewInit, OnDestroy {
 
   chartsInitialized = false;
   statCards = STAT_CARDS;
+
+  t(key: string): string {
+    return this.preferences.t(key);
+  }
 
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) {

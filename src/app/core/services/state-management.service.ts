@@ -9,10 +9,11 @@ import {
   finalize,
   map,
   shareReplay,
+  switchMap,
   tap,
   takeUntil,
 } from 'rxjs';
-import { AudioEntity, TranscriptionEntity, AiAnalysisEntity, CreateAudioPayload, CreateTranscriptionPayload, CreateAiAnalysisPayload } from './audio-workflow.service';
+import { AudioEntity, TranscriptionEntity, AiAnalysisEntity, CreateAudioPayload, CreateTranscriptionPayload, CreateAiAnalysisPayload, UpdateAudioPayload } from './audio-workflow.service';
 import { AudioWorkflowService } from './audio-workflow.service';
 import { MindmapWorkflowService, MindmapWorkspaceItem } from './mindmap-workflow.service';
 import { WorkflowEventsService } from './workflow-events.service';
@@ -20,6 +21,7 @@ import { ResourceApiService } from './resource-api.service';
 import { TagsService, Tag } from './tags.service';
 import { ApiEntity } from '../models/api.models';
 import { TokenStorageService } from './token-storage.service';
+import { NotificationService } from './notification.service';
 
 export interface AppState {
   audios: AudioEntity[];
@@ -56,6 +58,7 @@ export class StateManagementService {
   private readonly tagsService = inject(TagsService);
   private readonly tokenStorage = inject(TokenStorageService);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly notifications = inject(NotificationService);
   private readonly destroy$ = new Subject<void>();
 
   private readonly stateSubject = new BehaviorSubject<AppState>(initialState);
@@ -187,108 +190,124 @@ export class StateManagementService {
     this.errorSubject.next(null);
     let pendingRequests = 7;
 
-    const markCompleted = (): void => {
+    const markCompleted = (label: string): void => {
       pendingRequests -= 1;
+      console.log(`[StateManagement] ✅ ${label} completed (${pendingRequests} remaining)`);
       if (pendingRequests <= 0) {
         this.loadingSubject.next(false);
       }
     };
+
+    // Safety timeout: if loading takes >25s, force it to false
+    setTimeout(() => {
+      if (this.loadingSubject.getValue()) {
+        console.warn('[StateManagement] ⚠️ Loading timeout — forcing loading=false');
+        this.loadingSubject.next(false);
+      }
+    }, 25000);
 
     // Load all data in parallel with progressive updates
     // Each source emits independently so UI updates as data arrives
     this.audioWorkflow.listAudios()
       .pipe(
         tap(audios => {
+          console.log(`[StateManagement] Audios loaded: ${audios?.length ?? 0}`);
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, audios: audios || [] });
         }),
-        finalize(markCompleted),
+        finalize(() => markCompleted('audios')),
         takeUntil(this.destroy$)
       )
       .subscribe({
         error: (err) => {
-          console.error('Error loading audios:', err);
+          console.error('[StateManagement] ❌ Error loading audios:', err);
         }
       });
 
     this.audioWorkflow.listTranscriptions()
       .pipe(
         tap(transcriptions => {
+          console.log(`[StateManagement] Transcriptions loaded: ${transcriptions?.length ?? 0}`);
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, transcriptions: transcriptions || [] });
         }),
-        finalize(markCompleted),
+        finalize(() => markCompleted('transcriptions')),
         takeUntil(this.destroy$)
       )
       .subscribe({
         error: (err) => {
-          console.error('Error loading transcriptions:', err);
+          console.error('[StateManagement] ❌ Error loading transcriptions:', err);
         }
       });
 
     this.audioWorkflow.listAnalyses()
       .pipe(
         tap(analyses => {
+          console.log(`[StateManagement] Analyses loaded: ${analyses?.length ?? 0}`, analyses?.map(a => a._id));
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, analyses: analyses || [] });
         }),
-        finalize(markCompleted),
+        finalize(() => markCompleted('analyses')),
         takeUntil(this.destroy$)
       )
       .subscribe({
         error: (err) => {
-          console.error('Error loading analyses:', err);
+          console.error('[StateManagement] ❌ Error loading analyses:', err);
         }
       });
 
     this.mindmapWorkflow.listWorkspaceItemsProgressive()
       .pipe(
         tap(mindmaps => {
+          console.log(`[StateManagement] Mindmaps loaded: ${mindmaps?.length ?? 0}`);
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, mindmaps: mindmaps || [] });
         }),
-        finalize(markCompleted),
+        finalize(() => markCompleted('mindmaps')),
         takeUntil(this.destroy$)
       )
       .subscribe({
         error: (err) => {
-          console.error('Error loading mindmaps:', err);
+          console.error('[StateManagement] ❌ Error loading mindmaps:', err);
         }
       });
 
     this.resourceApi.list('folders')
       .pipe(
         tap(folders => {
+          console.log(`[StateManagement] Folders loaded: ${folders?.length ?? 0}`);
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, folders: folders || [] });
         }),
-        finalize(markCompleted),
+        finalize(() => markCompleted('folders')),
         takeUntil(this.destroy$)
       )
       .subscribe({
         error: (err) => {
-          console.error('Error loading folders:', err);
+          console.error('[StateManagement] ❌ Error loading folders:', err);
         }
       });
 
     this.resourceApi.list('documents')
       .pipe(
         tap(documents => {
+          console.log(`[StateManagement] Documents loaded: ${documents?.length ?? 0}`);
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ ...currentState, documents: documents || [] });
         }),
-        finalize(markCompleted),
+        finalize(() => markCompleted('documents')),
         takeUntil(this.destroy$)
       )
       .subscribe({
         error: (err) => {
-          console.error('Error loading documents:', err);
+          console.error('[StateManagement] ❌ Error loading documents:', err);
         }
       });
 
     this.tagsService.loadTags()
       .pipe(
         tap(tags => {
+          console.log(`[StateManagement] Tags loaded: ${tags?.length ?? 0}`);
           const currentState = this.stateSubject.getValue();
           this.stateSubject.next({ 
             ...currentState, 
@@ -296,12 +315,12 @@ export class StateManagementService {
             lastUpdated: new Date(),
           });
         }),
-        finalize(markCompleted),
+        finalize(() => markCompleted('tags')),
         takeUntil(this.destroy$)
       )
       .subscribe({
         error: (err) => {
-          console.error('Error loading tags:', err);
+          console.error('[StateManagement] ❌ Error loading tags:', err);
         }
       });
   }
@@ -317,6 +336,7 @@ export class StateManagementService {
           lastUpdated: new Date(),
         });
         this.workflowEvents.notifyChanged();
+        this.notifications.success('Audio creado correctamente');
       }),
     );
   }
@@ -331,6 +351,22 @@ export class StateManagementService {
           lastUpdated: new Date(),
         });
         this.workflowEvents.notifyChanged();
+        this.notifications.success('Audio eliminado correctamente');
+      }),
+    );
+  }
+
+  updateAudio(audioId: string, payload: UpdateAudioPayload): Observable<AudioEntity> {
+    return this.audioWorkflow.updateAudio(audioId, payload).pipe(
+      tap((updated) => {
+        const currentState = this.stateSubject.getValue();
+        this.stateSubject.next({
+          ...currentState,
+          audios: currentState.audios.map((a) => a._id === audioId ? { ...a, ...updated } : a),
+          lastUpdated: new Date(),
+        });
+        this.workflowEvents.notifyChanged();
+        this.notifications.success('Audio actualizado');
       }),
     );
   }
@@ -346,6 +382,7 @@ export class StateManagementService {
           lastUpdated: new Date(),
         });
         this.workflowEvents.notifyChanged();
+        this.notifications.success('Transcripción creada');
       }),
     );
   }
@@ -360,6 +397,7 @@ export class StateManagementService {
           lastUpdated: new Date(),
         });
         this.workflowEvents.notifyChanged();
+        this.notifications.success('Transcripción eliminada');
       }),
     );
   }
@@ -375,6 +413,7 @@ export class StateManagementService {
           lastUpdated: new Date(),
         });
         this.workflowEvents.notifyChanged();
+        this.notifications.success('Análisis IA generado correctamente');
       }),
     );
   }
@@ -389,6 +428,43 @@ export class StateManagementService {
           lastUpdated: new Date(),
         });
         this.workflowEvents.notifyChanged();
+        this.notifications.success('Análisis eliminado');
+      }),
+    );
+  }
+
+  // Replace operations (DELETE old + CREATE new) — backend has no PUT for these resources
+  replaceTranscription(oldId: string, audioId: string, newText: string): Observable<TranscriptionEntity> {
+    return this.audioWorkflow.deleteTranscription(oldId).pipe(
+      switchMap(() => this.audioWorkflow.createTranscription({ audioId, text: newText })),
+      tap((newTranscription) => {
+        const currentState = this.stateSubject.getValue();
+        this.stateSubject.next({
+          ...currentState,
+          transcriptions: [newTranscription, ...currentState.transcriptions.filter((t) => t._id !== oldId)],
+          lastUpdated: new Date(),
+        });
+        this.workflowEvents.notifyChanged();
+        this.notifications.success('Transcripción actualizada');
+      }),
+    );
+  }
+
+  replaceAnalysis(oldId: string, transcriptionId: string, newResult: Record<string, any>): Observable<AiAnalysisEntity> {
+    return this.audioWorkflow.deleteAnalysis(oldId).pipe(
+      switchMap(() => this.audioWorkflow.createAnalysis({
+        transcriptionId,
+        result: newResult as any,
+      })),
+      tap((newAnalysis) => {
+        const currentState = this.stateSubject.getValue();
+        this.stateSubject.next({
+          ...currentState,
+          analyses: [newAnalysis, ...currentState.analyses.filter((a) => a._id !== oldId)],
+          lastUpdated: new Date(),
+        });
+        this.workflowEvents.notifyChanged();
+        this.notifications.success('Análisis actualizado');
       }),
     );
   }
@@ -404,6 +480,7 @@ export class StateManagementService {
           lastUpdated: new Date(),
         });
         this.workflowEvents.notifyChanged();
+        this.notifications.success('Etiqueta creada');
       }),
     );
   }
@@ -418,6 +495,53 @@ export class StateManagementService {
           lastUpdated: new Date(),
         });
         this.workflowEvents.notifyChanged();
+        this.notifications.success('Etiqueta eliminada');
+      }),
+    );
+  }
+
+  // Folder actions
+  createFolder(payload: { name: string; parentFolderId?: string | null }): Observable<ApiEntity> {
+    return this.resourceApi.create<ApiEntity, Record<string, unknown>>('folders', payload).pipe(
+      tap((newFolder) => {
+        const currentState = this.stateSubject.getValue();
+        this.stateSubject.next({
+          ...currentState,
+          folders: [newFolder, ...currentState.folders],
+          lastUpdated: new Date(),
+        });
+        this.workflowEvents.notifyChanged();
+        this.notifications.success('Carpeta creada');
+      }),
+    );
+  }
+
+  updateFolder(folderId: string, payload: { name?: string; parentFolderId?: string | null }): Observable<ApiEntity> {
+    return this.resourceApi.update<ApiEntity, Record<string, unknown>>('folders', folderId, payload).pipe(
+      tap((updated) => {
+        const currentState = this.stateSubject.getValue();
+        this.stateSubject.next({
+          ...currentState,
+          folders: currentState.folders.map((f) => (f._id === folderId ? { ...f, ...updated } : f)),
+          lastUpdated: new Date(),
+        });
+        this.workflowEvents.notifyChanged();
+        this.notifications.success('Carpeta actualizada');
+      }),
+    );
+  }
+
+  deleteFolder(folderId: string): Observable<void> {
+    return this.resourceApi.remove('folders', folderId).pipe(
+      tap(() => {
+        const currentState = this.stateSubject.getValue();
+        this.stateSubject.next({
+          ...currentState,
+          folders: currentState.folders.filter((f) => f._id !== folderId),
+          lastUpdated: new Date(),
+        });
+        this.workflowEvents.notifyChanged();
+        this.notifications.success('Carpeta eliminada');
       }),
     );
   }

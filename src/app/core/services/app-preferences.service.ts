@@ -1,9 +1,10 @@
 import { DOCUMENT, isPlatformBrowser } from '@angular/common';
 import { Injectable, PLATFORM_ID, computed, inject, signal } from '@angular/core';
+import { TRANSLATIONS } from '../i18n/translations';
 
 export type AppLanguage = 'es' | 'en';
 export type AppTheme = 'dark' | 'light';
-export type ExportFormat = 'pdf' | 'notion' | 'obsidian';
+export type ExportFormat = 'pdf' | 'word';
 
 interface PreferencesState {
   language: AppLanguage;
@@ -36,54 +37,7 @@ export class AppPreferencesService {
   readonly privacyMode = computed(() => this.state().privacyMode);
 
   readonly labels = computed(() => {
-    const lang = this.language();
-    const dictionary: Record<AppLanguage, Record<string, string>> = {
-      es: {
-        'nav.dashboard': 'Panel Principal',
-        'nav.aiAnalysis': 'Análisis IA',
-        'nav.recordings': 'Grabaciones',
-        'nav.summaries': 'Resúmenes IA',
-        'nav.tasks': 'Tareas de Voz',
-        'nav.mindmaps': 'Mapas Mentales',
-        'nav.tags': 'Etiquetas',
-        'nav.settings': 'Configuración',
-        'nav.logout': 'Cerrar sesión',
-        'layout.search': 'Buscar ideas, tareas o grabaciones...',
-        'settings.title': 'Configuración',
-        'settings.subtitle': 'Personaliza idioma, tema y preferencias de tu workspace.',
-        'settings.language': 'Idioma de interfaz',
-        'settings.theme': 'Tema',
-        'settings.export': 'Formato por defecto',
-        'settings.notifications': 'Notificaciones',
-        'settings.privacy': 'Modo privacidad',
-        'settings.save': 'Guardar cambios',
-        'settings.saved': 'Preferencias guardadas.',
-        'settings.cancel': 'Cancelar',
-      },
-      en: {
-        'nav.dashboard': 'Dashboard',
-        'nav.aiAnalysis': 'AI Analysis',
-        'nav.recordings': 'Recordings',
-        'nav.summaries': 'AI Summaries',
-        'nav.tasks': 'Voice Tasks',
-        'nav.mindmaps': 'Mind Maps',
-        'nav.tags': 'Tags',
-        'nav.settings': 'Settings',
-        'nav.logout': 'Sign out',
-        'layout.search': 'Search ideas, tasks or recordings...',
-        'settings.title': 'Settings',
-        'settings.subtitle': 'Customize language, theme and workspace preferences.',
-        'settings.language': 'Interface language',
-        'settings.theme': 'Theme',
-        'settings.export': 'Default export format',
-        'settings.notifications': 'Notifications',
-        'settings.privacy': 'Privacy mode',
-        'settings.save': 'Save changes',
-        'settings.saved': 'Preferences saved.',
-        'settings.cancel': 'Cancel',
-      },
-    };
-    return dictionary[lang];
+    return TRANSLATIONS[this.language()];
   });
 
   hydrate(): void {
@@ -180,7 +134,7 @@ export class AppPreferencesService {
   }
 
   private parseExportFormat(value: unknown): ExportFormat {
-    if (value === 'notion' || value === 'obsidian' || value === 'pdf') {
+    if (value === 'word' || value === 'pdf') {
       return value;
     }
     return 'pdf';

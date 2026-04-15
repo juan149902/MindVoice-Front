@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { ApiEntity } from '../../core/models/api.models';
 import { ResourceApiService } from '../../core/services/resource-api.service';
 import { TokenStorageService } from '../../core/services/token-storage.service';
+import { NotificationService } from '../../core/services/notification.service';
 
 interface FolderEntity extends ApiEntity {
   _id?: string;
@@ -154,6 +155,7 @@ export class LibraryComponent implements OnInit {
   private readonly tokenStorage = inject(TokenStorageService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly notify = inject(NotificationService);
 
   folders: FolderEntity[] = [];
   sortMode: SortMode = 'newest';
@@ -191,10 +193,9 @@ export class LibraryComponent implements OnInit {
         this.applySort();
         this.loading = false;
         this.cdr.markForCheck();
-        console.log('[LIBRARY] Folders loaded successfully:', this.folders.length);
       },
       error: (error: HttpErrorResponse) => {
-        console.error('[LIBRARY] Failed to load folders:', error.status, error.error);
+        this.notify.error('Error al cargar carpetas');
         this.loading = false;
         
         if (error.status === 401) {

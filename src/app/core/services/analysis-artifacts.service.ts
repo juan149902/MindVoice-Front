@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
-import { AiAnalysisEntity } from './audio-workflow.service';
+import { Observable, switchMap, of } from 'rxjs';
+import { AiAnalysisEntity, AudioWorkflowService } from './audio-workflow.service';
 import {
   MindmapCanvasPayload,
   MindmapCanvasNodePayload,
@@ -19,8 +19,51 @@ interface CreateArtifactsInput {
 @Injectable({ providedIn: 'root' })
 export class AnalysisArtifactsService {
   private readonly mindmapWorkflow = inject(MindmapWorkflowService);
+  private readonly audioWorkflow = inject(AudioWorkflowService);
 
   createProfessionalArtifacts(input: CreateArtifactsInput): Observable<MindmapWorkspaceItem> {
+    const analysis = input.analysis;
+
+    // Validate mindmap completeness before building
+    if (this.isMindmapDataIncomplete(analysis)) {
+      // Use backend AI to enrich analysis before building the mindmap
+      return this.audioWorkflow.analyzeText(input.transcriptionText).pipe(
+        switchMap((enrichedResult) => {
+          const enrichedAnalysis: AiAnalysisEntity = {
+            ...analysis,
+            result: {
+              resumen: analysis.result.resumen || enrichedResult.report_ready_text || enrichedResult.executive_summary?.join('\n\n') || 'Sin resumen',
+              temas: analysis.result.temas?.length ? analysis.result.temas : [
+                ...(enrichedResult.tags || []),
+                ...(enrichedResult.semantic_keywords || []),
+                ...(enrichedResult.key_insights || []),
+              ].filter((v, i, a) => a.indexOf(v) === i).slice(0, 10),
+              acciones: analysis.result.acciones?.length ? analysis.result.acciones : (enrichedResult.task_list || []).map(t => ({
+                accion: t.task || '',
+                prioridad: t.priority || 'media',
+              })).filter(a => a.accion.trim().length > 0),
+              sentimiento: analysis.result.sentimiento || enrichedResult.sentiment,
+            },
+          };
+          return this.buildAndCreateMindmap({ ...input, analysis: enrichedAnalysis });
+        }),
+        // If enrichment fails, build mindmap with whatever data we have
+        switchMap((result) => of(result)),
+      );
+    }
+
+    return this.buildAndCreateMindmap(input);
+  }
+
+  private isMindmapDataIncomplete(analysis: AiAnalysisEntity): boolean {
+    const hasResumen = !!analysis.result.resumen?.trim();
+    const hasTemas = !!(analysis.result.temas?.length);
+    const hasAcciones = !!(analysis.result.acciones?.length);
+    // Incomplete if has summary but missing BOTH topics and actions (mindmap would be too sparse)
+    return hasResumen && !hasTemas && !hasAcciones;
+  }
+
+  private buildAndCreateMindmap(input: CreateArtifactsInput): Observable<MindmapWorkspaceItem> {
     const title = this.buildTitle(input.audioFileName, input.analysis);
     const canvas = this.buildCanvas(title, input.analysis);
     const content = this.buildStructuredDocumentContent(input, title);

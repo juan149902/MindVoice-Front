@@ -27,6 +27,8 @@ import { SocketMindmapUpdatedEvent } from '../../core/models/socket.models';
 import { TokenStorageService } from '../../core/services/token-storage.service';
 import { StateManagementService } from '../../core/services/state-management.service';
 import { ExportDialogComponent, ExportFormat } from '../../core/services/export-dialog.component';
+import { NotificationService } from '../../core/services/notification.service';
+import { AppPreferencesService } from '../../core/services/app-preferences.service';
  
 interface MindMapNode {
   id: string;
@@ -67,6 +69,9 @@ interface Point {
       background-image: radial-gradient(circle, rgba(124,58,237,0.16) 1px, transparent 1px);
       background-size: 24px 24px;
     }
+    :host-context(.theme-light) .canvas-dot-grid {
+      background-image: radial-gradient(circle, rgba(124,58,237,0.28) 1px, transparent 1px);
+    }
     .canvas-glow::before {
       content: '';
       position: absolute;
@@ -75,15 +80,173 @@ interface Point {
       background: radial-gradient(circle at 20% 20%, rgba(99,102,241,0.18), transparent 45%),
                   radial-gradient(circle at 80% 80%, rgba(14,165,233,0.14), transparent 42%);
     }
+    :host-context(.theme-light) .canvas-glow::before {
+      background: radial-gradient(circle at 20% 20%, rgba(99,102,241,0.1), transparent 45%),
+                  radial-gradient(circle at 80% 80%, rgba(14,165,233,0.08), transparent 42%);
+    }
+    /* Node styles in light mode: solid white card with colored border accent */
+    :host-context(.theme-light) .node-enter {
+      background: rgba(255, 255, 255, 0.96) !important;
+      color: #1e293b !important;
+      box-shadow: 0 4px 16px rgba(76, 29, 149, 0.12) !important;
+    }
+    :host-context(.theme-light) .node-enter span,
+    :host-context(.theme-light) .node-enter input {
+      color: #1e293b !important;
+    }
   `],
   template: `
+    <!-- SHARED/GUEST: Full-screen canvas-only view -->
+    @if (isSharedRoute && guestSessionMode) {
+      <div class="h-screen w-full flex flex-col bg-background-dark overflow-hidden">
+        <!-- Minimal header bar -->
+        <header class="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-surface-dark/90 shrink-0">
+          <div class="flex items-center gap-3">
+            <mat-icon class="text-primary text-xl">hub</mat-icon>
+            <div>
+              <h1 class="text-white text-lg font-bold leading-tight">{{ currentMap?.title || 'Mapa compartido' }}</h1>
+              <p class="text-xs text-gray-500">MindVoice · Modo invitado</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 text-[11px] font-bold border border-amber-500/25">
+              <mat-icon class="text-[13px] align-middle mr-0.5">person_outline</mat-icon>
+              Invitado
+            </span>
+            <button type="button"
+              class="h-8 px-3 rounded-lg border border-border-dark text-gray-300 text-xs font-semibold hover:bg-border-dark/60"
+              (click)="zoomOut()">
+              <mat-icon class="text-[16px]">remove</mat-icon>
+            </button>
+            <span class="text-xs text-gray-400 min-w-[40px] text-center">{{ (zoom * 100) | number:'1.0-0' }}%</span>
+            <button type="button"
+              class="h-8 px-3 rounded-lg border border-border-dark text-gray-300 text-xs font-semibold hover:bg-border-dark/60"
+              (click)="zoomIn()">
+              <mat-icon class="text-[16px]">add</mat-icon>
+            </button>
+            <button type="button"
+              class="h-8 px-3 rounded-lg border border-border-dark text-gray-300 text-xs font-semibold hover:bg-border-dark/60"
+              (click)="resetView()">
+              <mat-icon class="text-[16px]">center_focus_strong</mat-icon>
+            </button>
+          </div>
+        </header>
+
+        <!-- Full canvas area -->
+        <div
+          #canvasRef
+          class="flex-1 relative border-0 bg-background-dark/70 canvas-dot-grid canvas-glow overflow-hidden select-none"
+          [ngClass]="linkCreationMode ? 'cursor-crosshair' : (panning ? 'cursor-grabbing' : 'cursor-grab')"
+          (wheel)="onWheel($event)"
+          (pointerdown)="startPan($event)"
+          (click)="onCanvasClick()"
+          (keydown.enter)="onCanvasClick()"
+          (keydown.space)="onCanvasClick()"
+          tabindex="0"
+        >
+          <div
+            class="absolute origin-top-left transition-transform duration-75"
+            [style.width.px]="canvasWidth"
+            [style.height.px]="canvasHeight"
+            [style.transform]="'translate(' + panX + 'px, ' + panY + 'px) scale(' + zoom + ')'"
+          >
+            <svg
+              [attr.width]="canvasWidth"
+              [attr.height]="canvasHeight"
+              class="absolute inset-0 pointer-events-none"
+            >
+              <defs>
+                <marker id="mm-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L8,3 z" fill="#7c3aed" opacity="0.75"></path>
+                </marker>
+                <marker id="mm-arrow-selected" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                  <path d="M0,0 L0,6 L8,3 z" fill="#c4b5fd"></path>
+                </marker>
+              </defs>
+
+              @for (link of links; track link.id) {
+                <g>
+                  <path
+                    [attr.d]="getLinkPath(link)"
+                    [attr.stroke]="selectedLinkId === link.id ? '#c4b5fd' : '#7c3aed'"
+                    [attr.stroke-width]="selectedLinkId === link.id ? 2.5 : 1.8"
+                    [attr.marker-end]="selectedLinkId === link.id ? 'url(#mm-arrow-selected)' : 'url(#mm-arrow)'"
+                    stroke-opacity="0.9"
+                    fill="none"
+                    stroke-linecap="round"
+                  ></path>
+                  <path
+                    [attr.d]="getLinkPath(link)"
+                    stroke="transparent"
+                    stroke-width="16"
+                    fill="none"
+                    class="cursor-pointer pointer-events-all"
+                    (pointerdown)="selectLink($event, link.id)"
+                  ></path>
+                </g>
+              }
+            </svg>
+
+            @for (node of nodes; track node.id) {
+              <div
+                class="absolute rounded-xl px-4 py-2.5 border font-semibold shadow-lg transition-shadow duration-150 node-enter"
+                [ngClass]="[
+                  node.styleClass,
+                  selectedNodeId === node.id ? 'ring-2 ring-primary shadow-[0_0_18px_rgba(124,58,237,0.45)]' : '',
+                  editingNodeId === node.id ? 'cursor-text' : 'cursor-grab active:cursor-grabbing'
+                ]"
+                [style.width.px]="node.w"
+                [style.min-height.px]="node.h"
+                [style.left.px]="node.x"
+                [style.top.px]="node.y"
+                (pointerdown)="startDrag($event, node.id)"
+                (click)="handleNodeClick($event, node.id)"
+                (dblclick)="startNodeEdit($event, node.id)"
+                (keydown.enter)="selectNodeFromKeyboard(node.id)"
+                (keydown.space)="selectNodeFromKeyboard(node.id)"
+                tabindex="0"
+              >
+                @if (editingNodeId !== node.id) {
+                  <span class="block text-sm leading-relaxed whitespace-pre-wrap break-words w-full text-left">{{ node.label }}</span>
+                } @else {
+                  <input
+                    class="w-full bg-transparent border-none outline-none text-current text-sm"
+                    [value]="node.label"
+                    (input)="updateNodeLabel(node.id, $event)"
+                    (keydown.enter)="finishNodeEdit()"
+                    (keydown.escape)="finishNodeEdit()"
+                    (blur)="finishNodeEdit()"
+                    (pointerdown)="$event.stopPropagation()"
+                  />
+                }
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Bottom hint bar -->
+        <div class="px-4 py-2 border-t border-white/10 bg-surface-dark/90 flex flex-wrap gap-4 text-xs text-gray-500 shrink-0">
+          <span class="inline-flex items-center gap-1">
+            <kbd class="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px]">Doble clic</kbd>
+            editar texto
+          </span>
+          <span class="inline-flex items-center gap-1">
+            <kbd class="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[10px]">Arrastrar</kbd>
+            mover nodos
+          </span>
+          <span class="flex-1"></span>
+          <span class="text-gray-600">{{ participants.length }} colaborador(es) conectados</span>
+        </div>
+      </div>
+    } @else {
+    <!-- NORMAL AUTHENTICATED VIEW (existing template) -->
     <div class="p-6 max-w-[1500px] mx-auto w-full space-y-4">
       <section class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p class="text-xs uppercase tracking-[0.2em] text-primary/80 font-semibold">MindVoice Graph Studio</p>
-          <h1 class="text-3xl font-black text-white">Mapas mentales</h1>
+          <h1 class="text-3xl font-black text-white">{{ t('mindmaps.title') }}</h1>
           <p class="text-gray-400">
-            Estructura profesional, colaboración en tiempo real y guardado inteligente.
+            {{ t('mindmaps.subtitle') }}
           </p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -95,7 +258,7 @@ interface Point {
           >
             <span class="inline-flex items-center gap-2">
               <mat-icon class="text-lg" [class.animate-spin]="(loading$ | async)">refresh</mat-icon>
-              Recargar
+              {{ t('common.reload') }}
             </span>
           </button>
           <button
@@ -106,7 +269,7 @@ interface Point {
           >
             <span class="inline-flex items-center gap-2">
               <mat-icon class="text-lg">share</mat-icon>
-              Copiar link
+              {{ t('mindmaps.copyLink') }}
             </span>
           </button>
           <button
@@ -128,30 +291,12 @@ interface Point {
           >
             <span class="inline-flex items-center gap-2">
               <mat-icon class="text-lg">delete</mat-icon>
-              Eliminar mapa
+              {{ t('common.delete') }}
             </span>
           </button>
         </div>
       </section>
- 
-      @if (errorMessage) {
-        <section class="rounded-xl border border-rose-500/25 bg-rose-500/10 p-4 text-sm text-rose-300">
-          {{ errorMessage }}
-        </section>
-      }
- 
-      @if (successMessage) {
-        <section class="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm text-emerald-300">
-          {{ successMessage }}
-        </section>
-      }
- 
-      @if (infoMessage) {
-        <section class="rounded-xl border border-sky-500/25 bg-sky-500/10 p-4 text-sm text-sky-200">
-          {{ infoMessage }}
-        </section>
-      }
- 
+
       <div class="grid grid-cols-1 xl:grid-cols-[300px_1fr_300px] gap-4">
         <aside class="rounded-2xl border border-white/10 bg-surface-dark/85 backdrop-blur-sm p-4 space-y-4 h-fit shadow-[0_20px_50px_rgba(15,23,42,0.45)]">
           <div>
@@ -186,11 +331,11 @@ interface Point {
  
           <div class="space-y-2 max-h-[550px] overflow-auto pr-1">
             @if ((loading$ | async)) {
-              <p class="text-sm text-gray-400">Cargando mapas...</p>
+              <p class="text-sm text-gray-400">{{ t('common.loading') }}</p>
             }
             @if (!((loading$ | async)) && (mindmaps$ | async)?.length === 0) {
               <p class="text-sm text-gray-400">
-                No hay mapas aún. Crea el primero.
+                {{ t('mindmaps.noMaps') }}
               </p>
             }
  
@@ -215,7 +360,7 @@ interface Point {
                   type="button"
                   (click)="deleteMapFromList($event, item)"
                   class="shrink-0 h-8 w-8 rounded-md border border-rose-500/40 text-rose-300 hover:bg-rose-500/10 transition-colors flex items-center justify-center"
-                  title="Eliminar mapa"
+                  [attr.title]="t('common.delete')"
                 >
                   <mat-icon class="text-[18px]">delete</mat-icon>
                 </button>
@@ -240,7 +385,7 @@ interface Point {
               </p>
               @if (currentSourceAudioId) {
                 <p class="text-xs text-gray-400 mt-1">
-                  Audio origen: {{ currentSourceAudioId }}
+                  {{ t('mindmaps.fromAudio') }} {{ currentSourceAudioId }}
                 </p>
               }
             </div>
@@ -369,9 +514,8 @@ interface Point {
           <div
             #canvasRef
             class="relative rounded-xl border border-border-dark bg-background-dark/70 canvas-dot-grid canvas-glow overflow-hidden select-none"
-            [style.height.px]="canvasHeight"
+            style="height: clamp(420px, calc(100vh - 340px), 720px)"
             [ngClass]="linkCreationMode ? 'cursor-crosshair' : (panning ? 'cursor-grabbing' : 'cursor-grab')"
-            [style.overflow]="'hidden'"
             (click)="onCanvasClick()"
             (keydown.enter)="onCanvasClick()"
             (keydown.space)="onCanvasClick()"
@@ -475,7 +619,7 @@ interface Point {
  
             @if (!currentMap) {
               <div class="absolute inset-0 flex items-center justify-center text-gray-500 text-sm">
-                Selecciona o crea un mapa para empezar.
+                {{ t('mindmaps.generateAnalysis') }}
               </div>
             }
           </div>
@@ -512,7 +656,7 @@ interface Point {
           </div>
  
           <div class="rounded-lg border border-border-dark bg-background-dark/40 p-3 space-y-2">
-            <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold">Link compartible</p>
+            <p class="text-xs text-gray-400 uppercase tracking-wider font-semibold">{{ t('mindmaps.publicLink') }}</p>
             <input
               type="text"
               [value]="shareUrl"
@@ -520,7 +664,7 @@ interface Point {
               class="w-full h-9 rounded-md bg-background-dark border border-border-dark px-2 text-xs text-gray-200"
             />
             <p class="text-[11px] text-gray-500">
-              Cualquier usuario autenticado con este link entra directo a la misma sesión.
+              {{ t('mindmaps.shareDesc') }}
             </p>
           </div>
  
@@ -554,28 +698,6 @@ interface Point {
         </aside>
       </div>
  
-      @if (toastMessage) {
-        <div
-          class="fixed bottom-6 right-6 z-[70] max-w-sm rounded-lg border px-4 py-3 text-sm shadow-2xl backdrop-blur-sm"
-          [ngClass]="{
-            'border-emerald-400/45 bg-emerald-500/15 text-emerald-100': toastType === 'success',
-            'border-rose-400/45 bg-rose-500/15 text-rose-100': toastType === 'error',
-            'border-sky-400/45 bg-sky-500/15 text-sky-100': toastType === 'info'
-          }"
-        >
-          <div class="flex items-start justify-between gap-3">
-            <p class="leading-relaxed">{{ toastMessage }}</p>
-            <button
-              type="button"
-              class="text-xs opacity-80 hover:opacity-100"
-              (click)="dismissToast()"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
-      }
- 
       @if (showExportDialog) {
         <app-export-dialog
           title="mapa mental"
@@ -584,6 +706,7 @@ interface Point {
         />
       }
     </div>
+    }
   `,
 })
 export class MindMapsComponent implements OnInit, OnDestroy {
@@ -595,13 +718,15 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   private readonly platformId = inject(PLATFORM_ID);
   private readonly state = inject(StateManagementService);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly notify = inject(NotificationService);
+  private readonly preferences = inject(AppPreferencesService);
   private readonly destroy$ = new Subject<void>();
  
   @ViewChild('canvasRef') private canvasRef?: ElementRef<HTMLDivElement>;
  
   readonly ROOT_NODE_ID = 'root';
-  readonly canvasWidth = 1200;
-  readonly canvasHeight = 700;
+  readonly canvasWidth = 4000;
+  readonly canvasHeight = 3000;
  
   readonly loading$ = this.state.loading$;
   readonly error$ = this.state.error$;
@@ -612,15 +737,10 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   hasUnsavedChanges = false;
   isAuthenticated = false;
   guestSessionMode = false;
+  isSharedRoute = false;
  
   socketStatus: SocketConnectionStatus = 'disconnected';
- 
-  errorMessage = '';
-  successMessage = '';
-  infoMessage = '';
-  toastMessage = '';
-  toastType: 'success' | 'error' | 'info' = 'info';
- 
+
   showExportDialog = false;
   exportLoading: ExportFormat | null = null;
  
@@ -654,7 +774,6 @@ export class MindMapsComponent implements OnInit, OnDestroy {
  
   private autosaveTimerId: number | null = null;
   private saveQueued = false;
-  private toastTimerId: number | null = null;
   panning = false;
   private lastPanX = 0;
   private lastPanY = 0;
@@ -663,6 +782,8 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   panX = 0;
   panY = 0;
  
+  t(key: string): string { return this.preferences.t(key); }
+
   get agentHints(): string[] {
     const hints: string[] = [];
     hints.push(`Nodos: ${this.nodes.length} · Conexiones: ${this.links.length}.`);
@@ -694,22 +815,23 @@ export class MindMapsComponent implements OnInit, OnDestroy {
     if (!isPlatformBrowser(this.platformId)) {
       return;
     }
- 
+
+    this.isSharedRoute = this.router.url.startsWith('/mind-maps/shared');
     this.currentUsername = this.tokenStorage.getUsername() || `Invitado-${Math.floor(Math.random() * 900 + 100)}`;
     this.isAuthenticated = this.hasValidAuthSession();
     this.bindSocket();
     this.mindmapSocket.connect();
- 
+
     const requestedSession = this.route.snapshot.queryParamMap.get('session');
     if (!this.isAuthenticated) {
       if (requestedSession) {
         this.enterGuestSession(requestedSession);
       } else {
-        this.infoMessage = 'Comparte o abre un link de sesión para colaborar sin cuenta.';
+        this.showToast('Comparte o abre un link de sesión para colaborar sin cuenta.', 'info');
       }
       return;
     }
- 
+
     this.refreshData();
   }
  
@@ -775,14 +897,12 @@ export class MindMapsComponent implements OnInit, OnDestroy {
  
   async createMap(): Promise<void> {
     if (!this.isAuthenticated) {
-      this.errorMessage = 'Para crear un mapa en base de datos necesitas iniciar sesión.';
+      this.showToast('Para crear un mapa en base de datos necesitas iniciar sesión.', 'error');
       return;
     }
  
     const title = this.newMapTitle.trim() || 'Mapa colaborativo';
     this.creatingMap = true;
-    this.errorMessage = '';
-    this.successMessage = '';
  
     try {
       const created = await firstValueFrom(
@@ -790,11 +910,10 @@ export class MindMapsComponent implements OnInit, OnDestroy {
       );
       this.newMapTitle = '';
       this.openMap(created);
-      this.successMessage = 'Mapa creado y listo para compartir.';
       this.showToast('Mapa creado y listo para compartir.', 'success');
       this.state.refreshAllData();
     } catch (error) {
-      this.errorMessage = this.toErrorMessage(error, 'No se pudo crear el mapa.');
+      this.showToast(this.toErrorMessage(error, 'No se pudo crear el mapa.'), 'error');
     } finally {
       this.creatingMap = false;
     }
@@ -802,7 +921,7 @@ export class MindMapsComponent implements OnInit, OnDestroy {
  
   async saveNow(): Promise<void> {
     if (this.guestSessionMode || !this.isAuthenticated) {
-      this.infoMessage = 'Estás en modo invitado. El anfitrión autenticado es quien guarda en base de datos.';
+      this.showToast('Estás en modo invitado. El anfitrión autenticado es quien guarda en base de datos.', 'info');
       return;
     }
     await this.persistCurrentMap(true);
@@ -819,11 +938,9 @@ export class MindMapsComponent implements OnInit, OnDestroy {
       } else {
         this.fallbackCopyToClipboard(this.shareUrl);
       }
-      this.successMessage = 'Link copiado al portapapeles.';
-      this.errorMessage = '';
       this.showToast('Link copiado al portapapeles.', 'info');
     } catch {
-      this.errorMessage = 'No se pudo copiar el link. Cópialo manualmente.';
+      this.showToast('No se pudo copiar el link. Cópialo manualmente.', 'error');
     }
   }
 
@@ -875,12 +992,10 @@ export class MindMapsComponent implements OnInit, OnDestroy {
         replaceUrl: true,
       });
 
-      this.successMessage = 'Mapa eliminado correctamente.';
       this.showToast('Mapa eliminado correctamente.', 'success');
       this.state.refreshAllData();
     } catch (error) {
-      this.errorMessage = this.toErrorMessage(error, 'No se pudo eliminar el mapa.');
-      this.showToast('Error al eliminar el mapa.', 'error');
+      this.showToast(this.toErrorMessage(error, 'No se pudo eliminar el mapa.'), 'error');
     }
   }
 
@@ -897,7 +1012,7 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   openMap(item: MindmapWorkspaceItem): void {
     const nextMapId = item.mindmap._id;
     if (!nextMapId) {
-      this.errorMessage = 'El mapa seleccionado no tiene _id válido.';
+      this.showToast('El mapa seleccionado no tiene _id válido.', 'error');
       return;
     }
 
@@ -920,6 +1035,8 @@ export class MindMapsComponent implements OnInit, OnDestroy {
     this.resetParticipants();
     this.mindmapSocket.joinSession(nextMapId, this.currentUsername);
     this.addActivity(`Mapa abierto: ${item.title}`);
+    this.zoom = 1;
+    setTimeout(() => this.centerViewportOnNodes(), 0);
 
     void this.router.navigate([], {
       relativeTo: this.route,
@@ -1177,13 +1294,65 @@ export class MindMapsComponent implements OnInit, OnDestroy {
     this.lastPanY = event.clientY;
     canvas.setPointerCapture(event.pointerId);
   }
- 
+
   resetView(): void {
-    this.zoom = 1;
-    this.panX = 0;
-    this.panY = 0;
+    this.zoom = 1; // will be overridden by fitZoom inside centerViewportOnNodes
+    this.centerViewportOnNodes();
   }
- 
+
+  private centerViewportOnNodes(): void {
+    if (!isPlatformBrowser(this.platformId) || this.nodes.length === 0) {
+      this.panX = 0;
+      this.panY = 0;
+      return;
+    }
+
+    const viewport = this.canvasRef?.nativeElement;
+    if (!viewport) {
+      this.panX = 0;
+      this.panY = 0;
+      return;
+    }
+
+    const vpW = viewport.clientWidth;
+    const vpH = viewport.clientHeight;
+
+    // If layout hasn't been computed yet, retry after next paint
+    if (vpW === 0 || vpH === 0) {
+      requestAnimationFrame(() => this.centerViewportOnNodes());
+      return;
+    }
+
+    let minX = Number.POSITIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    this.nodes.forEach((node) => {
+      minX = Math.min(minX, node.x);
+      minY = Math.min(minY, node.y);
+      maxX = Math.max(maxX, node.x + node.w);
+      maxY = Math.max(maxY, node.y + node.h);
+    });
+
+    const contentW = maxX - minX;
+    const contentH = maxY - minY;
+    const cX = minX + contentW / 2;
+    const cY = minY + contentH / 2;
+
+    // Fit zoom so the full content is visible with padding, capped at 1
+    const padding = 48;
+    const fitZoom = Math.min(
+      1,
+      (vpW - padding * 2) / Math.max(contentW, 1),
+      (vpH - padding * 2) / Math.max(contentH, 1),
+    );
+    this.zoom = Math.round(fitZoom * 100) / 100;
+
+    this.panX = vpW / 2 - cX * this.zoom;
+    this.panY = vpH / 2 - cY * this.zoom;
+  }
+
   zoomIn(): void {
     this.zoom = Math.min(this.zoom + 0.2, 2);
   }
@@ -1221,8 +1390,6 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   }
  
   refreshData(): void {
-    this.errorMessage = '';
-    this.successMessage = '';
     this.guestSessionMode = false;
  
     this.mindmaps$
@@ -1244,10 +1411,10 @@ export class MindMapsComponent implements OnInit, OnDestroy {
                 .subscribe({
                   next: (shared) => {
                     this.openMap(shared);
-                    this.infoMessage = 'Se abrió un mapa compartido por link.';
+                    this.showToast('Se abrió un mapa compartido por link.', 'info');
                   },
                   error: (error) => {
-                    this.errorMessage = this.toErrorMessage(error, 'No se pudo abrir el mapa compartido.');
+                    this.showToast(this.toErrorMessage(error, 'No se pudo abrir el mapa compartido.'), 'error');
                     if (mindmaps.length > 0) {
                       this.openMap(mindmaps[0]);
                     }
@@ -1261,7 +1428,7 @@ export class MindMapsComponent implements OnInit, OnDestroy {
           }
         },
         error: (error) => {
-          this.errorMessage = this.toErrorMessage(error, 'No se pudo cargar los mapas mentales.');
+          this.showToast(this.toErrorMessage(error, 'No se pudo cargar los mapas mentales.'), 'error');
         },
       });
   }
@@ -1277,8 +1444,6 @@ export class MindMapsComponent implements OnInit, OnDestroy {
       return;
     }
  
-    this.errorMessage = '';
-    this.successMessage = '';
     this.guestSessionMode = true;
  
     const initialCanvas = this.buildInitialCanvas();
@@ -1302,7 +1467,9 @@ export class MindMapsComponent implements OnInit, OnDestroy {
     this.updateShareUrl(normalizedSession);
     this.resetParticipants();
     this.mindmapSocket.joinSession(normalizedSession, this.currentUsername);
-    this.infoMessage = 'Modo invitado activado: colaboración en vivo por pestaña/link, sin login.';
+    this.zoom = 1;
+    setTimeout(() => this.centerViewportOnNodes(), 0);
+    this.showToast('Modo invitado activado: colaboración en vivo por pestaña/link, sin login.', 'info');
     this.addActivity(`Sesión invitada abierta: ${normalizedSession}`);
   }
  
@@ -1310,9 +1477,9 @@ export class MindMapsComponent implements OnInit, OnDestroy {
     try {
       const shared = await firstValueFrom(this.workflow.getWorkspaceItemByMindmapId(mindmapId));
       this.openMap(shared);
-      this.infoMessage = 'Se abrió un mapa compartido por link.';
+      this.showToast('Se abrió un mapa compartido por link.', 'info');
     } catch (error) {
-      this.errorMessage = this.toErrorMessage(error, 'No se pudo abrir el mapa compartido.');
+      this.showToast(this.toErrorMessage(error, 'No se pudo abrir el mapa compartido.'), 'error');
       const firstMindmap = (await firstValueFrom(this.mindmaps$))?.[0];
       if (firstMindmap) {
         this.openMap(firstMindmap);
@@ -1328,40 +1495,39 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   private calcNodeSize(label: string, isRoot = false): { w: number; h: number } {
     const text       = (label ?? '').trim() || 'Nodo';
     const fontSize   = 14;                        // text-sm
-    const charW      = fontSize * 0.6;            // ancho promedio por carácter (mejorado)
+    const charW      = fontSize * 0.62;           // wider estimate for font-semibold
     const padX       = 32;                        // px-4 = 16px × 2
-    const padY       = 20;                        // py-2.5 = 10px × 2
-    const lineH      = 20;                        // leading-snug = 1.5 × 14px ≈ 21px
-    const minW       = isRoot ? 200 : 180;        // ancho mínimo aumentado
-    const maxW       = isRoot ? 400 : 320;        // ancho máximo aumentado
+    const padY       = 24;                        // py-2.5 + extra breathing room
+    const lineH      = 24;                        // leading-relaxed ≈ 1.6 × 14px + safety
+    const minW       = isRoot ? 200 : 180;
+    const maxW       = isRoot ? 500 : 450;
 
-    // Contar palabras para estimar líneas de forma más precisa
+    // Width based on text: for short text, fit tightly; for long text, use maxW
+    const textWidth = text.length * charW + padX;
+    const w = Math.max(minW, Math.min(maxW, textWidth));
+
+    // Height based on actual number of wrapped lines at the chosen width
+    const effectiveCharsPerLine = Math.max(1, Math.floor((w - padX) / charW));
     const words = text.split(/\s+/);
-    const charsPerLine = Math.floor((maxW - padX) / charW);
-
-    // Calcular líneas reales basadas en palabras
-    let lines = 0;
-    let currentLineLength = 0;
+    let actualLines = 0;
+    let lineLen = 0;
     for (const word of words) {
-      if (currentLineLength + word.length > charsPerLine && currentLineLength > 0) {
-        lines++;
-        currentLineLength = word.length;
+      const wLen = word.length;
+      if (wLen > effectiveCharsPerLine) {
+        // Very long word → breaks across multiple lines
+        if (lineLen > 0) { actualLines++; lineLen = 0; }
+        actualLines += Math.ceil(wLen / effectiveCharsPerLine);
+      } else if (lineLen + wLen > effectiveCharsPerLine && lineLen > 0) {
+        actualLines++;
+        lineLen = wLen + 1;
       } else {
-        currentLineLength += word.length + 1; // +1 para el espacio
+        lineLen += wLen + 1;
       }
     }
-    if (currentLineLength > 0) lines++;
+    if (lineLen > 0) actualLines++;
+    actualLines = Math.max(1, actualLines);
 
-    // Asegurar al menos 1 línea
-    lines = Math.max(1, lines);
-
-    // Calcular ancho basado en la línea más larga
-    const longestWord = words.reduce((max, w) => w.length > max.length ? w : max, '');
-    const minWForText = Math.min(maxW, Math.max(minW, longestWord.length * charW + padX));
-    const w = Math.max(minWForText, minW);
-
-    // Altura basada en número de líneas
-    const h = Math.max(isRoot ? 65 : 56, lines * lineH + padY);
+    const h = Math.max(isRoot ? 65 : 48, actualLines * lineH + padY);
 
     return { w, h };
   }
@@ -1406,8 +1572,9 @@ export class MindMapsComponent implements OnInit, OnDestroy {
     const isRoot = node.id === this.ROOT_NODE_ID;
     const size   = this.calcNodeSize(node.label, isRoot);
     // Si el backend guardó dimensiones más grandes que las calculadas, las respetamos.
-    const width  = Math.max(size.w, this.clamp(this.asFiniteNumber(node.w, size.w), size.w, 400));
-    const height = Math.max(size.h, this.clamp(this.asFiniteNumber(node.h, size.h), size.h, 400));
+    const width  = Math.max(size.w, this.clamp(this.asFiniteNumber(node.w, size.w), size.w, 500));
+    // Height: always use at least the calculated size (no upper clamp — let it grow)
+    const height = Math.max(size.h, this.asFiniteNumber(node.h, size.h));
     const x = this.asFiniteNumber(node.x, 80);
     const y = this.asFiniteNumber(node.y, 80);
  
@@ -1528,19 +1695,15 @@ export class MindMapsComponent implements OnInit, OnDestroy {
       if (manual) {
         this.showToast('Mapa guardado correctamente.', 'success');
       }
-      this.infoMessage = '';
       this.addActivity('Estado guardado en base de datos.');
       this.state.refreshAllData();
     } catch (error) {
       if (this.isAuthError(error)) {
         this.isAuthenticated = false;
         this.guestSessionMode = true;
-        this.errorMessage = '';
-        this.infoMessage = 'Tu sesión expiró. Sigues en modo colaborativo invitado; inicia sesión para guardar en base de datos.';
         this.showToast('Sesión vencida: ahora estás en modo invitado.', 'info');
         this.addActivity('Sesión vencida: persistencia deshabilitada hasta iniciar sesión.');
       } else {
-        // Guardado en BD falló silenciosamente — el socket ya sincronizó el estado.
         console.warn('[MindMaps] Auto-guardado BD falló (socket activo):', error);
       }
     } finally {
@@ -1633,8 +1796,7 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   }
  
   dismissToast(): void {
-    this.toastMessage = '';
-    this.clearToastTimer();
+    // No-op: global notification service handles dismiss
   }
  
   private shouldApplyPresenceEvent(sessionId: string | undefined): boolean {
@@ -1651,7 +1813,7 @@ export class MindMapsComponent implements OnInit, OnDestroy {
     if (!isPlatformBrowser(this.platformId)) {
       return;
     }
-    this.shareUrl = `${window.location.origin}/mind-maps?session=${sessionId}`;
+    this.shareUrl = `${window.location.origin}/mind-maps/shared?session=${sessionId}`;
   }
  
   private hasValidAuthSession(): boolean {
@@ -1884,12 +2046,10 @@ export class MindMapsComponent implements OnInit, OnDestroy {
     }
  
     if (center) {
-      const contentWidth = Math.max(1, maxX - minX);
-      const contentHeight = Math.max(1, maxY - minY);
-      const targetMinX = framePadding + Math.max(0, (this.canvasWidth - (framePadding * 2) - contentWidth) / 2);
-      const targetMinY = framePadding + Math.max(0, (this.canvasHeight - (framePadding * 2) - contentHeight) / 2);
-      shiftX = targetMinX - minX;
-      shiftY = targetMinY - minY;
+      // Anchor nodes near the canvas origin so they are always visible.
+      // centerViewportOnNodes() will pan the viewport to visually center them.
+      shiftX = framePadding - minX;
+      shiftY = framePadding - minY;
     }
  
     return nodes.map((node) => {
@@ -2010,29 +2170,14 @@ export class MindMapsComponent implements OnInit, OnDestroy {
   }
  
   private showToast(message: string, type: 'success' | 'error' | 'info'): void {
-    if (!message.trim()) {
-      return;
-    }
- 
-    this.toastMessage = message;
-    this.toastType = type;
-    this.clearToastTimer();
- 
-    if (!isPlatformBrowser(this.platformId)) {
-      return;
-    }
- 
-    this.toastTimerId = window.setTimeout(() => {
-      this.toastMessage = '';
-      this.toastTimerId = null;
-    }, 2600);
+    if (!message.trim()) return;
+    if (type === 'success') this.notify.success(message);
+    else if (type === 'error') this.notify.error(message);
+    else this.notify.info(message);
   }
- 
+
   private clearToastTimer(): void {
-    if (this.toastTimerId !== null) {
-      window.clearTimeout(this.toastTimerId);
-      this.toastTimerId = null;
-    }
+    // No-op: global notification service handles auto-dismiss
   }
  
   openExportDialog(): void {

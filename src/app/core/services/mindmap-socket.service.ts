@@ -43,7 +43,7 @@ export class MindmapSocketService implements OnDestroy {
     const socketUrl = this.resolveSocketUrl();
 
     this.socket = io(socketUrl, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 8,
       reconnectionDelay: 800,
@@ -223,11 +223,18 @@ export class MindmapSocketService implements OnDestroy {
   }
 
   private resolveSocketUrl(): string {
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') {
+        return window.location.origin;
+      }
+    }
+
     const socketUrl = environment.socketUrl?.trim();
     if (socketUrl) {
       return socketUrl;
     }
 
-    return environment.apiUrl?.trim() || 'http://18.223.30.63:5000';
+    return environment.apiUrl?.trim() || 'https://mindvoice-ai.com';
   }
 }

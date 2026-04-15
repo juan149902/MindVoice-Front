@@ -100,7 +100,7 @@ export class AudioDownloaderService {
       const apiOrigin = this.apiBaseUrl.startsWith('http')
         ? new URL(this.apiBaseUrl).origin
         : '';
-      const remoteOrigin = apiOrigin || 'http://18.223.30.63:5000';
+      const remoteOrigin = apiOrigin || 'https://mindvoice-ai.com';
 
       if (parsed.origin === remoteOrigin) {
         return `/api${parsed.pathname}${parsed.search}`;

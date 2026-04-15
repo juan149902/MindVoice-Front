@@ -36,8 +36,7 @@ export class MindmapGeneratorService {
       const resumenId = `resumen-${nodeId++}`;
       nodes.push({
         id: resumenId,
-        label: analysis.result.resumen.substring(0, 50) + '...',
-        data: { full: analysis.result.resumen },
+        label: analysis.result.resumen,
         level: 1,
         type: 'topic',
       });
@@ -56,6 +55,7 @@ export class MindmapGeneratorService {
       links.push({ source: rootId, target: temasId });
 
       analysis.result.temas.forEach((tema) => {
+        if (!tema) return;
         const temaId = `tema-${nodeId++}`;
         nodes.push({
           id: temaId,
@@ -83,8 +83,7 @@ export class MindmapGeneratorService {
         const label = `${accion.accion} (${accion.prioridad || 'media'})`;
         nodes.push({
           id: accionId,
-          label: label.substring(0, 40),
-          data: { full: label },
+          label,
           level: 2,
           type: 'action',
         });

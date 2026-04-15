@@ -28,7 +28,17 @@ body {
   color: #0f172a !important;
 }
 
+/* Landing page siempre tiene tema oscuro — excluirla de los overrides de tema claro */
+.theme-light .landing-shell .text-white,
+.theme-light .landing-shell .text-gray-100 {
+  color: #ffffff !important;
+}
+
 .theme-light .text-gray-500 {
+  color: #64748b !important;
+}
+
+.theme-light .landing-shell .text-gray-500 {
   color: #64748b !important;
 }
 
@@ -36,6 +46,13 @@ body {
 .theme-light .text-gray-300,
 .theme-light .text-gray-200 {
   color: #475569 !important;
+}
+
+/* Landing page: preserve original dark colors */
+.theme-light .landing-shell .text-gray-400,
+.theme-light .landing-shell .text-gray-300,
+.theme-light .landing-shell .text-gray-200 {
+  color: revert !important;
 }
 
 .theme-light .bg-white\/5 {
@@ -400,3 +417,179 @@ body.auth-hide-chatbot bp-widget {
   box-shadow: 0 20px 45px rgba(76, 29, 149, 0.12);
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(245, 241, 255, 0.92)) !important;
 }
+
+/* ============================================================
+   SMOOTH THEME TRANSITIONS
+   ============================================================ */
+body,
+.app-futuristic-shell,
+.app-premium-sidebar,
+.app-premium-header,
+.app-content-shell {
+  transition: background-color 0.25s ease, border-color 0.2s ease, box-shadow 0.25s ease;
+}
+
+/* ============================================================
+   SEMANTIC UTILITY CLASSES — theme-aware custom components
+   ============================================================ */
+
+/* Recordings: folder sidebar */
+.mv-recordings-sidebar {
+  background: rgba(10, 15, 30, 0.6);
+}
+.theme-light .mv-recordings-sidebar {
+  background: rgba(248, 246, 255, 0.94);
+}
+
+/* Recordings: audio card */
+.mv-recordings-card {
+  background: rgba(17, 24, 39, 0.6);
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.mv-recordings-card:hover {
+  background: rgba(17, 24, 39, 0.82);
+}
+.theme-light .mv-recordings-card {
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 2px 12px rgba(76, 29, 149, 0.07);
+}
+.theme-light .mv-recordings-card:hover {
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 4px 18px rgba(76, 29, 149, 0.12);
+}
+
+/* Recordings: hero section gradient */
+.mv-recordings-hero {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(15, 23, 41, 0.9), rgba(99, 102, 241, 0.15));
+}
+.theme-light .mv-recordings-hero {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(248, 246, 255, 0.96), rgba(99, 102, 241, 0.08));
+}
+
+/* Modal: main container background */
+.mv-modal-bg {
+  background-color: #0f1729;
+}
+.theme-light .mv-modal-bg {
+  background-color: #ffffff;
+}
+.theme-light .mv-modal-bg > header {
+  background: linear-gradient(to right, rgba(124, 58, 237, 0.06), rgba(99, 102, 241, 0.04)) !important;
+}
+
+/* Modal: footer area */
+.mv-modal-footer {
+  background-color: #0a0f1e;
+}
+.theme-light .mv-modal-footer {
+  background-color: #f8f7ff;
+}
+
+/* ============================================================
+   EXTENDED THEME-LIGHT OVERRIDES
+   ============================================================ */
+
+/* Semi-transparent white surfaces → subtle purple tint */
+.theme-light .bg-white\/\[0\.02\] {
+  background-color: rgba(124, 58, 237, 0.04) !important;
+}
+.theme-light .bg-white\/\[0\.03\] {
+  background-color: rgba(124, 58, 237, 0.05) !important;
+}
+
+/* Dark overlay backgrounds */
+.theme-light .bg-black\/20 {
+  background-color: rgba(124, 58, 237, 0.06) !important;
+}
+.theme-light .bg-black\/30 {
+  background-color: rgba(124, 58, 237, 0.08) !important;
+}
+
+/* border-white/8 */
+.theme-light .border-white\/8 {
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+/* Skeleton loaders and utility grays */
+.theme-light .bg-gray-700 {
+  background-color: #e2e8f0 !important;
+}
+.theme-light .hover\:bg-gray-600:hover {
+  background-color: #cbd5e1 !important;
+}
+.theme-light button.bg-gray-700,
+.theme-light .bg-gray-700.text-gray-300 {
+  color: #334155 !important;
+}
+/* Toggle switch inactive state */
+.theme-light .bg-gray-600 {
+  background-color: #d1d5db !important;
+}
+
+/* Dark section backgrounds (modal colored sections) */
+.theme-light .bg-blue-950\/30 {
+  background-color: rgba(59, 130, 246, 0.08) !important;
+}
+.theme-light .bg-emerald-950\/20 {
+  background-color: rgba(16, 185, 129, 0.07) !important;
+}
+.theme-light .bg-amber-950\/20 {
+  background-color: rgba(245, 158, 11, 0.07) !important;
+}
+.theme-light .bg-violet-950\/20 {
+  background-color: rgba(124, 58, 237, 0.07) !important;
+}
+.theme-light .bg-rose-950\/20 {
+  background-color: rgba(244, 63, 94, 0.07) !important;
+}
+
+/* Light text variants → dark equivalents for light mode */
+.theme-light .text-blue-200  { color: #1d4ed8 !important; }
+.theme-light .text-blue-300  { color: #2563eb !important; }
+.theme-light .text-emerald-200 { color: #047857 !important; }
+.theme-light .text-emerald-300 { color: #059669 !important; }
+.theme-light .text-amber-200 { color: #b45309 !important; }
+.theme-light .text-amber-300 { color: #d97706 !important; }
+.theme-light .text-violet-200 { color: #5b21b6 !important; }
+.theme-light .text-violet-300 { color: #6d28d9 !important; }
+.theme-light .text-indigo-200 { color: #3730a3 !important; }
+.theme-light .text-indigo-300 { color: #4338ca !important; }
+.theme-light .text-sky-200   { color: #0369a1 !important; }
+.theme-light .text-sky-300   { color: #0284c7 !important; }
+.theme-light .text-pink-200  { color: #9d174d !important; }
+.theme-light .text-pink-300  { color: #be185d !important; }
+.theme-light .text-rose-200  { color: #9f1239 !important; }
+.theme-light .text-rose-300  { color: #be123c !important; }
+.theme-light .text-cyan-300  { color: #0e7490 !important; }
+.theme-light .text-teal-300  { color: #0f766e !important; }
+.theme-light .text-purple-300 { color: #6d28d9 !important; }
+
+/* Hover text overrides */
+.theme-light .hover\:text-gray-200:hover { color: #374151 !important; }
+.theme-light .hover\:text-blue-200:hover { color: #1d4ed8 !important; }
+.theme-light .group:hover .group-hover\:text-blue-200 { color: #1d4ed8 !important; }
+
+/* Semi-transparent colored chips & badges */
+.theme-light .bg-indigo-500\/15 { background-color: rgba(99, 102, 241, 0.12) !important; }
+.theme-light .bg-indigo-500\/10 { background-color: rgba(99, 102, 241, 0.1) !important; }
+.theme-light .bg-sky-500\/8     { background-color: rgba(14, 165, 233, 0.1) !important; }
+.theme-light .bg-violet-500\/8  { background-color: rgba(124, 58, 237, 0.1) !important; }
+
+/* Gradient hero on recordings page in light mode */
+.theme-light .mv-recordings-hero {
+  border-color: rgba(167, 139, 250, 0.3) !important;
+}
+
+/* ============================================================
+   LANDING PAGE — siempre modo oscuro, sin importar el tema
+   ============================================================ */
+.theme-light .landing-shell .text-violet-200 { color: #ddd6fe !important; }
+.theme-light .landing-shell .text-violet-300 { color: #c4b5fd !important; }
+.theme-light .landing-shell .text-violet-400 { color: #a78bfa !important; }
+.theme-light .landing-shell .text-slate-200  { color: #e2e8f0 !important; }
+.theme-light .landing-shell .text-slate-300  { color: #cbd5e1 !important; }
+.theme-light .landing-shell .text-slate-400  { color: #94a3b8 !important; }
+.theme-light .landing-shell .text-slate-500  { color: #64748b !important; }
+
+.theme-light .landing-shell mat-icon { color: inherit !important; }
+.theme-light .landing-shell .hover\:text-white:hover { color: #ffffff !important; }

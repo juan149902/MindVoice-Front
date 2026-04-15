@@ -10,9 +10,13 @@ import { TokenStorageService } from './token-storage.service';
 export interface AudioEntity extends ApiEntity {
   _id?: string;
   userId: string;
+  title?: string;
   filePath: string;
   duration: number;
   format?: string;
+  transcription?: string | null;
+  folderId?: string | null;
+  tagIds?: string[];
   recordedAt?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -41,6 +45,19 @@ export interface AnalysisResult {
   temas: string[];
   acciones: AnalysisAction[];
   sentimiento?: string;
+  // Backend rich fields (preserved from MindvoiceAnalyzeResponse)
+  title?: string;
+  _originalTranscription?: string;
+  edited_text?: string;
+  executive_summary?: string[];
+  key_insights?: string[];
+  task_list?: { task: string; priority: string }[];
+  mind_map_nodes?: { id: string; label: string; parentId: string | null }[];
+  transcription_with_timestamps?: { start: string; end: string; text: string }[];
+  _tags?: string[];
+  semantic_keywords?: string[];
+  report_ready_text?: string;
+  [key: string]: unknown;
 }
 
 export interface AiAnalysisEntity extends ApiEntity {
@@ -53,6 +70,18 @@ export interface AiAnalysisEntity extends ApiEntity {
 export interface CreateAudioPayload {
   filePath: string;
   duration: number;
+  format?: string;
+  title?: string;
+  folderId?: string | null;
+  tagIds?: string[];
+}
+
+export interface UpdateAudioPayload {
+  title?: string;
+  folderId?: string | null;
+  tagIds?: string[];
+  filePath?: string;
+  duration?: number;
   format?: string;
 }
 
@@ -111,6 +140,8 @@ export class AudioWorkflowService {
   private transcriptionCache$ = new BehaviorSubject<Observable<TranscriptionEntity[]> | null>(null);
   private analysisCache$ = new BehaviorSubject<Observable<AiAnalysisEntity[]> | null>(null);
 
+  // Backend Audio schema now supports folderId and tagIds natively
+
   getCurrentUserId(): string {
     const userId = this.tokenStorage.getUserId();
     if (!userId) {
@@ -136,13 +167,37 @@ export class AudioWorkflowService {
     return request$;
   }
 
+  // Backend Audio schema supports folderId and tagIds
   createAudio(payload: CreateAudioPayload): Observable<AudioEntity> {
-    return this.resourceApi.create<AudioEntity, AudioEntity>('audios', {
+    this.audioCache$.next(null);
+    const body: Record<string, unknown> = {
       userId: this.getCurrentUserId(),
       filePath: payload.filePath,
       duration: payload.duration,
       format: payload.format?.trim() || 'wav',
-    });
+    };
+    if (payload.title) body['title'] = payload.title;
+    if (payload.folderId) body['folderId'] = payload.folderId;
+    if (payload.tagIds?.length) body['tagIds'] = payload.tagIds;
+    return this.resourceApi.create<AudioEntity, Record<string, unknown>>('audios', body);
+  }
+
+  updateAudio(audioId: string, payload: UpdateAudioPayload): Observable<AudioEntity> {
+    this.audioCache$.next(null);
+
+    const body: Record<string, unknown> = {};
+    if (payload.title !== undefined) body['title'] = payload.title;
+    if (payload.folderId !== undefined) body['folderId'] = payload.folderId;
+    if (payload.tagIds !== undefined) body['tagIds'] = payload.tagIds;
+    if (payload.filePath !== undefined) body['filePath'] = payload.filePath;
+    if (payload.duration !== undefined) body['duration'] = payload.duration;
+    if (payload.format !== undefined) body['format'] = payload.format;
+
+    if (Object.keys(body).length > 0) {
+      return this.resourceApi.update<AudioEntity, Record<string, unknown>>('audios', audioId, body);
+    }
+
+    return this.resourceApi.getById<AudioEntity>('audios', audioId);
   }
 
   deleteAudio(audioId: string): Observable<void> {
@@ -192,12 +247,85 @@ export class AudioWorkflowService {
     const request$ = this.resourceApi
       .list<AiAnalysisEntity>('ai-analyses')
       .pipe(
-        map((analyses) => this.sortByDateDesc(analyses)),
+        map((analyses) => this.sortByDateDesc(analyses).map(a => this.normalizeAnalysisEntity(a))),
         shareReplay(1)
       );
 
     this.analysisCache$.next(request$);
     return request$;
+  }
+
+  /**
+   * Normalizes the analysis result to always have { resumen, temas, acciones, sentimiento }
+   * while preserving ALL original backend fields (title, executive_summary, key_insights,
+   * mind_map_nodes, transcription_with_timestamps, etc.) for rich document display.
+   */
+  private normalizeAnalysisEntity(analysis: AiAnalysisEntity): AiAnalysisEntity {
+    const raw = analysis.result as unknown as Record<string, unknown>;
+    if (!raw || typeof raw !== 'object') {
+      console.warn('[AudioWorkflow] Analysis result is not an object:', analysis._id);
+      return analysis;
+    }
+
+    // Already in the expected format — still merge original fields
+    if (raw['resumen'] && typeof raw['resumen'] === 'string' && !raw['executive_summary']) {
+      return analysis;
+    }
+
+    console.log(`[AudioWorkflow] Normalizing analysis ${analysis._id}: has executive_summary=${!!raw['executive_summary']}, report_ready_text=${!!raw['report_ready_text']}`);
+
+    // Convert from MindvoiceAnalyzeResponse format to AnalysisResult format
+    const execSummary = Array.isArray(raw['executive_summary'])
+      ? (raw['executive_summary'] as string[]).filter(s => typeof s === 'string' && s.trim()).join('\n\n')
+      : '';
+    const reportText = typeof raw['report_ready_text'] === 'string' ? raw['report_ready_text'].trim() : '';
+    const transcription = typeof raw['transcription'] === 'string' ? raw['transcription'].trim() : '';
+
+    const resumen = reportText || execSummary || transcription || (raw['resumen'] as string) || 'Sin resumen';
+
+    const tags = Array.isArray(raw['tags']) ? raw['tags'].filter((t): t is string => typeof t === 'string') : [];
+    const keywords = Array.isArray(raw['semantic_keywords']) ? raw['semantic_keywords'].filter((t): t is string => typeof t === 'string') : [];
+    const insights = Array.isArray(raw['key_insights']) ? raw['key_insights'].filter((t): t is string => typeof t === 'string') : [];
+    const existingTemas = Array.isArray(raw['temas']) ? raw['temas'].filter((t): t is string => typeof t === 'string') : [];
+    const temas = existingTemas.length > 0
+      ? existingTemas
+      : [...new Set([...tags, ...keywords, ...insights])].slice(0, 10);
+
+    const taskList = Array.isArray(raw['task_list']) ? raw['task_list'] as { task?: string; priority?: string }[] : [];
+    const existingAcciones = Array.isArray(raw['acciones']) ? raw['acciones'] as { accion: string; prioridad: string }[] : [];
+    const acciones = existingAcciones.length > 0
+      ? existingAcciones
+      : taskList.map(t => ({
+          accion: (t.task || '').trim(),
+          prioridad: this.normalizePriority(t.priority),
+        })).filter(a => a.accion.length > 0);
+
+    const sentimiento = typeof raw['sentiment'] === 'string'
+      ? raw['sentiment'].trim()
+      : (typeof raw['sentimiento'] === 'string' ? raw['sentimiento'].trim() : undefined);
+
+    return {
+      ...analysis,
+      result: {
+        // Standard frontend fields
+        resumen,
+        temas,
+        acciones,
+        ...(sentimiento ? { sentimiento } : {}),
+        // Preserve ALL original backend fields for rich document display
+        ...(typeof raw['title'] === 'string' ? { title: raw['title'] } : {}),
+        ...(typeof raw['transcription'] === 'string' ? { _originalTranscription: raw['transcription'] } : {}),
+        ...(typeof raw['edited_text'] === 'string' ? { edited_text: raw['edited_text'] } : {}),
+        ...(Array.isArray(raw['executive_summary']) ? { executive_summary: raw['executive_summary'] as string[] } : {}),
+        ...(Array.isArray(raw['key_insights']) ? { key_insights: raw['key_insights'] as string[] } : {}),
+        ...(Array.isArray(raw['task_list']) ? { task_list: raw['task_list'] as { task: string; priority: string }[] } : {}),
+        ...(Array.isArray(raw['mind_map_nodes']) ? { mind_map_nodes: raw['mind_map_nodes'] as { id: string; label: string; parentId: string | null }[] } : {}),
+        ...(Array.isArray(raw['transcription_with_timestamps']) ? { transcription_with_timestamps: raw['transcription_with_timestamps'] as { start: string; end: string; text: string }[] } : {}),
+        ...(Array.isArray(raw['tags']) ? { _tags: raw['tags'] as string[] } : {}),
+        ...(Array.isArray(raw['semantic_keywords']) ? { semantic_keywords: raw['semantic_keywords'] as string[] } : {}),
+        ...(typeof raw['report_ready_text'] === 'string' ? { report_ready_text: raw['report_ready_text'] } : {}),
+      } satisfies AnalysisResult,
+    };
   }
 
   createAnalysis(payload: CreateAiAnalysisPayload): Observable<AiAnalysisEntity> {
@@ -222,16 +350,23 @@ export class AudioWorkflowService {
   }
 
   analyzeAudio(audio: Blob, fileName: string, apiKey?: string): Observable<MindvoiceAnalyzeResponse> {
-    const explicitApiKey = this.normalizeApiKey(apiKey);
-    const openRouterApiKey = this.resolveOpenRouterApiKey(explicitApiKey);
-
-    if (!openRouterApiKey) {
-      return throwError(() => new Error('AI_API_KEY_MISSING'));
-    }
-
     const normalizedFileName = this.ensureAudioFileName(fileName, audio.type);
+
     return this.prepareCompatibilityAudio(audio, normalizedFileName).pipe(
-      switchMap(({ blob: compatibilityBlob }) => this.openRouterAudioAnalyzeRequest(compatibilityBlob, openRouterApiKey)),
+      switchMap(({ blob: compatibilityBlob, fileName: compatFileName }) => {
+        // Try backend /mindvoice-api/analyze/audio first (uses JWT auth, saves tokens)
+        return this.requestAudioAnalysis(compatibilityBlob, compatFileName, '', { queryMode: false }).pipe(
+          catchError(() => {
+            // Backend failed — fallback to OpenRouter direct call
+            const explicitApiKey = this.normalizeApiKey(apiKey);
+            const openRouterApiKey = this.resolveOpenRouterApiKey(explicitApiKey);
+            if (!openRouterApiKey) {
+              return throwError(() => new Error('AI_API_KEY_MISSING'));
+            }
+            return from(this.openRouterAudioAnalyzeRequest(compatibilityBlob, openRouterApiKey));
+          }),
+        );
+      }),
     );
   }
 

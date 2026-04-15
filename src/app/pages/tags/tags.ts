@@ -26,6 +26,7 @@ import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { Subject, takeUntil } from 'rxjs';
 import { TagsService, Tag } from '../../core/services/tags.service';
+import { AppPreferencesService } from '../../core/services/app-preferences.service';
 
 type SortMode = 'newest' | 'oldest' | 'name';
 
@@ -40,18 +41,18 @@ type SortMode = 'newest' | 'oldest' | 'name';
       <section class="premium-page-hero rounded-2xl border border-white/10 bg-gradient-to-br from-cyan-500/16 via-surface-dark/88 to-violet-900/16 p-6 shadow-2xl">
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h1 class="text-3xl font-black text-white tracking-tight">Mis Etiquetas</h1>
-            <p class="text-sm text-gray-400 mt-1">Crea y organiza tus etiquetas personalizadas.</p>
+            <h1 class="text-3xl font-black text-white tracking-tight">{{ t('tags.title') }}</h1>
+            <p class="text-sm text-gray-400 mt-1">{{ t('tags.subtitle') }}</p>
           </div>
           <div class="flex items-center gap-3">
-            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Orden</label>
+            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ t('tags.order') }}</label>
             <select
               [(ngModel)]="sortMode"
               (ngModelChange)="applySort()"
               class="h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-200">
-              <option value="newest">Más recientes</option>
-              <option value="oldest">Más antiguas</option>
-              <option value="name">Nombre A-Z</option>
+              <option value="newest">{{ t('tags.newest') }}</option>
+              <option value="oldest">{{ t('tags.oldest') }}</option>
+              <option value="name">{{ t('tags.nameAZ') }}</option>
             </select>
             <button
               type="button"
@@ -60,7 +61,7 @@ type SortMode = 'newest' | 'oldest' | 'name';
               [disabled]="tagsService.loading()">
               <span class="inline-flex items-center gap-2">
                 <mat-icon class="text-lg" [class.animate-spin]="tagsService.loading()">refresh</mat-icon>
-                Recargar
+                {{ t('common.reload') }}
               </span>
             </button>
           </div>
@@ -68,14 +69,14 @@ type SortMode = 'newest' | 'oldest' | 'name';
 
         <form class="mt-5 grid grid-cols-1 lg:grid-cols-4 gap-3" (submit)="$event.preventDefault(); createTag()">
           <div class="lg:col-span-3">
-            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Nombre</label>
+            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider">{{ t('tags.name') }}</label>
             <input
               [(ngModel)]="newTagName"
               name="newTagName"
               type="text"
               maxlength="50"
               class="mt-1 w-full h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-100"
-              placeholder="Ej. importante" />
+              [placeholder]="t('tags.placeholder')" />
           </div>
           <div class="lg:col-span-1 flex items-end">
             <button
@@ -84,7 +85,7 @@ type SortMode = 'newest' | 'oldest' | 'name';
               [disabled]="submitting || tagsService.loading()">
               <span class="inline-flex items-center gap-2">
                 <mat-icon class="text-lg">add</mat-icon>
-                Crear
+                {{ t('common.create') }}
               </span>
             </button>
           </div>
@@ -124,8 +125,8 @@ type SortMode = 'newest' | 'oldest' | 'name';
           <div class="h-48 flex items-center justify-center text-center text-gray-400">
             <div>
               <mat-icon class="text-4xl text-primary mb-2">local_offer</mat-icon>
-              <p class="text-base font-semibold text-gray-300">No hay etiquetas creadas</p>
-              <p class="text-sm">Crea tu primera etiqueta para empezar.</p>
+              <p class="text-base font-semibold text-gray-300">{{ t('tags.noTags') }}</p>
+              <p class="text-sm">{{ t('tags.createFirst') }}</p>
             </div>
           </div>
         }
@@ -142,8 +143,8 @@ type SortMode = 'newest' | 'oldest' | 'name';
                       class="text-2xl shrink-0"
                       [style.color]="tag.color || '#7c3aed'">local_offer</mat-icon>
                     <div class="min-w-0">
-                      <h3 class="text-white font-bold text-base leading-tight break-words">{{ tag.name || 'Sin nombre' }}</h3>
-                      <p class="text-xs text-gray-500 mt-1">#{{ tag.name?.toLowerCase() || 'etiqueta' }}</p>
+                      <h3 class="text-white font-bold text-base leading-tight break-words">{{ tag.name || t('tags.noName') }}</h3>
+                      <p class="text-xs text-gray-500 mt-1">#{{ tag.name.toLowerCase() || 'etiqueta' }}</p>
                     </div>
                   </div>
                   <div class="flex items-center gap-1 shrink-0">
@@ -172,6 +173,7 @@ export class TagsComponent implements OnInit, OnDestroy {
   readonly tagsService = inject(TagsService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly cdr = inject(ChangeDetectorRef);
+  private readonly preferences = inject(AppPreferencesService);
   private readonly destroy$ = new Subject<void>();
 
   sortedTags: Tag[] = [];
@@ -183,6 +185,8 @@ export class TagsComponent implements OnInit, OnDestroy {
 
   errorMessage = '';
   successMessage = '';
+
+  t(key: string): string { return this.preferences.t(key); }
 
   ngOnInit(): void {
     // Guard SSR
@@ -209,7 +213,6 @@ export class TagsComponent implements OnInit, OnDestroy {
           // ✅ FIX: Ahora tags es correctamente un array gracias a TagsService
           this.sortedTags = [...tags];
           this.applySort();
-          console.log('[TagsComponent] Tags loaded and displayed:', this.sortedTags.length);
           this.cdr.markForCheck();
         },
         error: () => {

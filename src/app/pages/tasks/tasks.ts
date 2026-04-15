@@ -5,19 +5,27 @@ import { MatIconModule } from '@angular/material/icon';
 import { Observable, Subject, takeUntil } from 'rxjs';
 import {
   AiAnalysisEntity,
+  AudioEntity,
   TranscriptionEntity,
 } from '../../core/services/audio-workflow.service';
 import { StateManagementService } from '../../core/services/state-management.service';
+import { NotificationService } from '../../core/services/notification.service';
+import { AppPreferencesService } from '../../core/services/app-preferences.service';
 
 type PriorityFilter = 'all' | 'alta' | 'media' | 'baja';
 
+/**
+ * Compatible with mobile task_list[{task, priority}] structure.
+ * Uses same field names as Flutter app for cross-platform consistency.
+ */
 interface DerivedTask {
   id: string;
   analysisId: string;
   transcriptionId: string;
-  accion: string;
-  prioridad: string;
+  task: string;
+  priority: string;
   createdAt?: string;
+  audioTitle?: string;
 }
 
 @Component({
@@ -27,138 +35,182 @@ interface DerivedTask {
   template: `
     <div class="p-8 max-w-[1200px] mx-auto w-full space-y-6 premium-page-shell">
       <!-- Header -->
-      <section class="premium-page-hero rounded-2xl bg-gradient-to-br from-rose-500/20 via-surface-dark/90 to-orange-900/20 border border-rose-500/30 p-6 space-y-4 backdrop-blur-sm">
+      <section class="premium-page-hero rounded-2xl bg-gradient-to-br from-violet-600/20 via-surface-dark/90 to-indigo-900/20 border border-violet-500/30 p-6 space-y-4 backdrop-blur-sm">
         <div class="flex items-center justify-between gap-4 flex-wrap">
-          <div class="space-y-2">
-            <h1 class="text-4xl font-black text-white">Tareas Detectadas</h1>
-            <p class="text-gray-300 text-sm">Listado operativo generado desde <code class="bg-black/30 px-2 py-1 rounded text-primary">ai-analyses.result.acciones</code>.</p>
+          <div class="flex items-center gap-3">
+            <mat-icon class="text-3xl text-violet-400">auto_awesome</mat-icon>
+            <div class="space-y-1">
+              <h1 class="text-3xl font-black text-white tracking-tight">{{ t('tasks.title') }}</h1>
+              <p class="text-gray-400 text-sm">{{ t('tasks.subtitle') }}</p>
+            </div>
           </div>
-          <button
-            type="button"
-            class="h-11 px-5 rounded-lg bg-gradient-to-r from-rose-500 to-orange-500 border border-rose-400/40 text-sm font-semibold text-white hover:shadow-[0_0_20px_rgba(244,63,94,0.4)] transition-all duration-300"
-            (click)="refreshData()"
-            [disabled]="(loading$ | async)"
-          >
-            <span class="inline-flex items-center gap-2">
-              <mat-icon class="text-lg" [class.animate-spin]="(loading$ | async)">refresh</mat-icon>
-              {{ (loading$ | async) ? 'Cargando...' : 'Recargar' }}
-            </span>
-          </button>
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500/15 text-red-400">
+                <span class="w-2 h-2 rounded-full bg-red-400"></span>
+                {{ countByPriority('alta') }} {{ t('tasks.high') }}
+              </span>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-orange-500/15 text-orange-400">
+                <span class="w-2 h-2 rounded-full bg-orange-400"></span>
+                {{ countByPriority('media') }} {{ t('tasks.medium') }}
+              </span>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-green-500/15 text-green-400">
+                <span class="w-2 h-2 rounded-full bg-green-400"></span>
+                {{ countByPriority('baja') }} {{ t('tasks.low') }}
+              </span>
+            </div>
+            <button
+              type="button"
+              class="h-10 px-4 rounded-xl bg-violet-600 hover:bg-violet-500 text-sm font-semibold text-white transition-all duration-200 shadow-lg shadow-violet-600/25"
+              (click)="refreshData()"
+              [disabled]="(loading$ | async)"
+            >
+              <span class="inline-flex items-center gap-2">
+                <mat-icon class="text-lg" [class.animate-spin]="(loading$ | async)">refresh</mat-icon>
+                {{ (loading$ | async) ? t('common.loading') : t('common.reload') }}
+              </span>
+            </button>
+          </div>
         </div>
       </section>
 
       @if (error$ | async) {
-        <section class="rounded-xl border border-rose-500/40 bg-gradient-to-r from-rose-500/20 to-rose-500/10 p-4 text-sm text-rose-200 backdrop-blur-sm">
+        <section class="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-300 backdrop-blur-sm">
           {{ error$ | async }}
         </section>
       }
 
-      <!-- Filters Card -->
-      <section class="rounded-xl border border-white/10 bg-surface-dark/60 p-6 space-y-4 backdrop-blur-sm">
-        <h2 class="text-lg font-bold text-white">Filtros activos</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="space-y-1">
-            <label for="task-search" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Buscar</label>
-            <input
-              id="task-search"
-              type="text"
-              [(ngModel)]="searchTerm"
-              (ngModelChange)="onFiltersChanged()"
-              class="w-full h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-100"
-              placeholder="Acción, ID o texto..."
-            />
-          </div>
-
-          <div class="space-y-1">
-            <label for="task-priority" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-              Prioridad
-            </label>
-            <select
-              id="task-priority"
-              [(ngModel)]="priorityFilter"
-              (ngModelChange)="onFiltersChanged()"
-              class="w-full h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-100"
-            >
-              <option value="all">Todas</option>
-              <option value="alta">Alta</option>
-              <option value="media">Media</option>
-              <option value="baja">Baja</option>
-            </select>
-          </div>
-
-          <div class="grid grid-cols-3 gap-2">
-            <div class="rounded-lg border border-white/10 bg-background-dark p-3">
-              <p class="text-xs text-gray-400">Alta</p>
-              <p class="text-xl font-bold text-white">{{ countByPriority('alta') }}</p>
-            </div>
-            <div class="rounded-lg border border-white/10 bg-background-dark p-3">
-              <p class="text-xs text-gray-400">Media</p>
-              <p class="text-xl font-bold text-white">{{ countByPriority('media') }}</p>
-            </div>
-            <div class="rounded-lg border border-white/10 bg-background-dark p-3">
-              <p class="text-xs text-gray-400">Baja</p>
-              <p class="text-xl font-bold text-white">{{ countByPriority('baja') }}</p>
-            </div>
-          </div>
+      <!-- Filters -->
+      <section class="flex flex-wrap items-center gap-3">
+        <div class="relative flex-1 min-w-[200px] max-w-md">
+          <mat-icon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm">search</mat-icon>
+          <input
+            id="task-search"
+            type="text"
+            [(ngModel)]="searchTerm"
+            (ngModelChange)="onFiltersChanged()"
+            class="w-full h-9 rounded-xl bg-white/5 border border-white/10 pl-8 pr-3 text-xs text-gray-200 outline-none focus:border-violet-500/50 placeholder:text-gray-500"
+            placeholder="Buscar tarea..."
+          />
         </div>
+        <select
+          id="task-priority"
+          [(ngModel)]="priorityFilter"
+          (ngModelChange)="onFiltersChanged()"
+          class="h-9 rounded-xl bg-white/5 border border-white/10 px-3 text-xs text-gray-300 outline-none focus:border-violet-500/50"
+        >
+          <option value="all">{{ t('tasks.allPriorities') }}</option>
+          <option value="alta">{{ t('tasks.high') }}</option>
+          <option value="media">{{ t('tasks.medium') }}</option>
+          <option value="baja">{{ t('tasks.low') }}</option>
+        </select>
+        <select
+          id="task-audio"
+          [(ngModel)]="audioFilter"
+          (ngModelChange)="onFiltersChanged()"
+          class="h-9 rounded-xl bg-white/5 border border-white/10 px-3 text-xs text-gray-300 outline-none focus:border-violet-500/50 max-w-[220px] truncate"
+        >
+          <option value="all">Todos los audios</option>
+          @for (name of uniqueAudioNames; track name) {
+            <option [value]="name">{{ name }}</option>
+          }
+        </select>
+        <span class="text-xs text-gray-500">{{ filteredTasks.length }} tarea{{ filteredTasks.length !== 1 ? 's' : '' }}</span>
+      </section>
 
+      <!-- Task List - matches mobile InsightsPage card style -->
+      <section class="space-y-3">
         @if ((loading$ | async)) {
-          <p class="text-sm text-gray-400">Cargando tareas...</p>
+          <div class="rounded-2xl border border-white/10 bg-surface-dark/60 p-12 text-center backdrop-blur-sm">
+            <mat-icon class="text-4xl text-gray-600 animate-spin mb-3">refresh</mat-icon>
+            <p class="text-sm text-gray-400">{{ t('common.loading') }}</p>
+          </div>
+        } @else if (tasks.length === 0) {
+          <div class="rounded-2xl border border-white/10 bg-surface-dark/60 p-12 text-center backdrop-blur-sm space-y-3">
+            <mat-icon class="text-5xl text-violet-400/40">auto_awesome</mat-icon>
+            <h3 class="text-lg font-semibold text-gray-300">{{ t('tasks.noTasks') }}</h3>
+            <p class="text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
+              {{ t('tasks.generateAnalysis') }}
+            </p>
+          </div>
         } @else if (pagedTasks.length === 0) {
-          <p class="text-sm text-gray-400">No hay tareas para el filtro actual.</p>
+          <div class="rounded-2xl border border-white/10 bg-surface-dark/60 p-8 text-center backdrop-blur-sm">
+            <mat-icon class="text-4xl text-gray-600 mb-2">filter_list_off</mat-icon>
+            <p class="text-sm text-gray-400">No hay tareas para el filtro actual.</p>
+          </div>
         } @else {
-          <div class="space-y-3">
-            @for (task of pagedTasks; track task.id) {
-              <article class="rounded-lg border border-border-dark bg-background-dark/40 p-4 space-y-3 hover:border-primary/35 hover:bg-background-dark/60 transition-all">
-                <div class="flex items-start justify-between gap-4">
-                  <div class="min-w-0">
-                    <p class="text-sm font-semibold text-white">{{ task.accion }}</p>
-                    <p class="text-xs text-gray-500 mt-1">
-                      Prioridad: {{ task.prioridad.toUpperCase() }} ·
-                      Análisis: {{ task.analysisId }} ·
-                      Transcripción: {{ task.transcriptionId }}
-                    </p>
-                  </div>
+          @for (task of pagedTasks; track task.id) {
+            <article class="rounded-2xl border border-white/10 bg-surface-dark/70 p-4 flex items-center gap-3 hover:border-violet-500/30 transition-all backdrop-blur-sm shadow-sm hover:shadow-md hover:shadow-black/10">
+              <!-- Check icon colored by priority (same as mobile) -->
+              <mat-icon class="text-2xl shrink-0"
+                [class.text-red-400]="task.priority === 'alta'"
+                [class.text-orange-400]="task.priority === 'media'"
+                [class.text-green-400]="task.priority === 'baja'"
+              >check_circle_outline</mat-icon>
 
-                  <button
-                    type="button"
-                    class="p-2 rounded-md text-rose-300 hover:bg-rose-500/10 disabled:opacity-50"
-                    (click)="deleteAnalysis(task.analysisId)"
-                    [disabled]="false"
-                    title="Eliminar análisis origen"
-                  >
-                    <mat-icon class="text-lg">delete</mat-icon>
-                  </button>
+              <!-- Task text -->
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-white leading-snug">{{ task.task }}</p>
+                <div class="flex items-center gap-2 mt-1 flex-wrap">
+                  @if (task.audioTitle) {
+                    <span class="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                      <mat-icon class="text-xs">graphic_eq</mat-icon>
+                      {{ t('tasks.fromAudio') }} {{ task.audioTitle }}
+                    </span>
+                  }
+                  @if (task.createdAt) {
+                    <span class="text-[11px] text-gray-600">{{ task.createdAt | date:'shortDate' }}</span>
+                  }
                 </div>
+              </div>
 
-                <p class="text-sm text-gray-300 line-clamp-3">
-                  {{ getTranscriptionPreview(task.transcriptionId) }}
-                </p>
-              </article>
-            }
-          </div>
+              <!-- Priority badge (same as mobile) -->
+              <span class="shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider"
+                [class.bg-red-500/15]="task.priority === 'alta'"
+                [class.text-red-400]="task.priority === 'alta'"
+                [class.bg-orange-500/15]="task.priority === 'media'"
+                [class.text-orange-400]="task.priority === 'media'"
+                [class.bg-green-500/15]="task.priority === 'baja'"
+                [class.text-green-400]="task.priority === 'baja'"
+              >{{ task.priority === 'alta' ? t('tasks.high') : task.priority === 'media' ? t('tasks.medium') : t('tasks.low') }}</span>
 
-          <div class="pt-2 flex items-center justify-between text-sm text-gray-400">
-            <span>Página {{ currentPage }} de {{ totalPages }}</span>
-            <div class="flex gap-2">
+              <!-- Delete button -->
               <button
                 type="button"
-                class="h-9 px-3 rounded-lg border border-border-dark hover:bg-border-dark/70 disabled:opacity-40"
-                (click)="previousPage()"
-                [disabled]="currentPage <= 1"
+                class="shrink-0 p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                (click)="requestDeleteAnalysis(task.analysisId)"
+                [disabled]="deletingAnalysisId === task.analysisId"
+                title="Eliminar análisis"
               >
-                Anterior
+                <mat-icon class="text-lg">delete_outline</mat-icon>
               </button>
-              <button
-                type="button"
-                class="h-9 px-3 rounded-lg border border-border-dark hover:bg-border-dark/70 disabled:opacity-40"
-                (click)="nextPage()"
-                [disabled]="currentPage >= totalPages"
-              >
-                Siguiente
-              </button>
+            </article>
+          }
+
+          <!-- Pagination -->
+          @if (totalPages > 1) {
+            <div class="pt-2 flex items-center justify-between text-sm text-gray-400">
+              <span>Página {{ currentPage }} de {{ totalPages }}</span>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="h-9 px-3 rounded-xl border border-white/10 hover:bg-white/5 disabled:opacity-40 transition-colors"
+                  (click)="previousPage()"
+                  [disabled]="currentPage <= 1"
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  class="h-9 px-3 rounded-xl border border-white/10 hover:bg-white/5 disabled:opacity-40 transition-colors"
+                  (click)="nextPage()"
+                  [disabled]="currentPage >= totalPages"
+                >
+                  Siguiente
+                </button>
+              </div>
             </div>
-          </div>
+          }
         }
       </section>
     </div>
@@ -167,20 +219,28 @@ interface DerivedTask {
 export class TasksComponent implements OnInit, OnDestroy {
   private readonly state = inject(StateManagementService);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly notify = inject(NotificationService);
+  private readonly preferences = inject(AppPreferencesService);
   private readonly destroy$ = new Subject<void>();
+
+  t(key: string): string { return this.preferences.t(key); }
 
   loading$: Observable<boolean> = this.state.loading$;
   error$: Observable<string | null> = this.state.error$;
   
   analyses$: Observable<AiAnalysisEntity[]> = this.state.analyses$;
   transcriptions$: Observable<TranscriptionEntity[]> = this.state.transcriptions$;
+  audios$: Observable<AudioEntity[]> = this.state.audios$;
 
   searchTerm = '';
   priorityFilter: PriorityFilter = 'all';
+  audioFilter = 'all';
   currentPage = 1;
   readonly pageSize = 8;
+  deletingAnalysisId: string | null = null;
 
   private transcriptionsById = new Map<string, TranscriptionEntity>();
+  private audiosById = new Map<string, AudioEntity>();
   private currentAnalyses: AiAnalysisEntity[] = [];
 
   ngOnInit(): void {
@@ -200,6 +260,16 @@ export class TasksComponent implements OnInit, OnDestroy {
         );
       });
 
+    this.audios$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((audios) => {
+        this.audiosById = new Map(
+          audios
+            .filter((item): item is AudioEntity & { _id: string } => typeof item._id === 'string')
+            .map((item) => [item._id, item]),
+        );
+      });
+
     this.analyses$
       .pipe(takeUntil(this.destroy$))
       .subscribe((analyses) => {
@@ -213,6 +283,10 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  /**
+   * Reads from task_list[{task, priority}] first (same as mobile Flutter app),
+   * then falls back to acciones[{accion, prioridad}] for backwards compatibility.
+   */
   get tasks(): DerivedTask[] {
     const derived: DerivedTask[] = [];
 
@@ -222,31 +296,66 @@ export class TasksComponent implements OnInit, OnDestroy {
         continue;
       }
 
-      const actions = analysis.result.acciones ?? [];
-      actions.forEach((action, index) => {
-        const accion = action.accion?.trim();
-        if (!accion) {
-          return;
-        }
+      const transcription = this.transcriptionsById.get(analysis.transcriptionId);
+      const audio = transcription?.audioId ? this.audiosById.get(transcription.audioId) : undefined;
+      const audioTitle = audio?.title || audio?.filePath || undefined;
 
-        derived.push({
-          id: `${analysisId}-${index}`,
-          analysisId,
-          transcriptionId: analysis.transcriptionId,
-          accion,
-          prioridad: this.normalizePriority(action.prioridad),
-          createdAt: analysis.createdAt,
+      // Prefer task_list (mobile-compatible) over acciones (frontend-only normalization)
+      const taskList = analysis.result.task_list;
+      if (Array.isArray(taskList) && taskList.length > 0) {
+        taskList.forEach((item, index) => {
+          const task = (item.task || '').trim();
+          if (!task) return;
+
+          derived.push({
+            id: `${analysisId}-${index}`,
+            analysisId,
+            transcriptionId: analysis.transcriptionId,
+            task,
+            priority: this.normalizePriority(item.priority || ''),
+            createdAt: analysis.createdAt,
+            audioTitle,
+          });
         });
-      });
+      } else {
+        // Fallback to acciones (normalized field)
+        const actions = analysis.result.acciones ?? [];
+        actions.forEach((action, index) => {
+          const task = action.accion?.trim();
+          if (!task) return;
+
+          derived.push({
+            id: `${analysisId}-${index}`,
+            analysisId,
+            transcriptionId: analysis.transcriptionId,
+            task,
+            priority: this.normalizePriority(action.prioridad),
+            createdAt: analysis.createdAt,
+            audioTitle,
+          });
+        });
+      }
     }
 
     return derived;
   }
 
+  get uniqueAudioNames(): string[] {
+    const names = new Set<string>();
+    for (const task of this.tasks) {
+      if (task.audioTitle) names.add(task.audioTitle);
+    }
+    return [...names].sort();
+  }
+
   get filteredTasks(): DerivedTask[] {
     const term = this.searchTerm.trim().toLocaleLowerCase();
     return this.tasks.filter((task) => {
-      if (this.priorityFilter !== 'all' && task.prioridad !== this.priorityFilter) {
+      if (this.priorityFilter !== 'all' && task.priority !== this.priorityFilter) {
+        return false;
+      }
+
+      if (this.audioFilter !== 'all' && task.audioTitle !== this.audioFilter) {
         return false;
       }
 
@@ -258,9 +367,8 @@ export class TasksComponent implements OnInit, OnDestroy {
       const preview = transcription?.text.toLocaleLowerCase() || '';
 
       return (
-        task.accion.toLocaleLowerCase().includes(term) ||
-        task.analysisId.toLocaleLowerCase().includes(term) ||
-        task.transcriptionId.toLocaleLowerCase().includes(term) ||
+        task.task.toLocaleLowerCase().includes(term) ||
+        (task.audioTitle?.toLocaleLowerCase().includes(term) ?? false) ||
         preview.includes(term)
       );
     });
@@ -279,31 +387,28 @@ export class TasksComponent implements OnInit, OnDestroy {
     this.state.refreshAllData();
   }
 
-  deleteAnalysis(analysisId: string): void {
-    if (!analysisId) {
+  requestDeleteAnalysis(analysisId: string): void {
+    if (!analysisId || this.deletingAnalysisId) {
       return;
     }
 
-    if (!globalThis.confirm('¿Eliminar el análisis origen de esta tarea?')) {
-      return;
-    }
-
+    this.deletingAnalysisId = analysisId;
     this.state.deleteAnalysis(analysisId)
       .pipe(takeUntil(this.destroy$))
-      .subscribe();
-  }
-
-  getTranscriptionPreview(transcriptionId: string): string {
-    const text = this.transcriptionsById.get(transcriptionId)?.text || '';
-    if (!text) {
-      return 'Sin texto de transcripción asociado.';
-    }
-
-    return text.length > 220 ? `${text.slice(0, 220)}...` : text;
+      .subscribe({
+        next: () => {
+          this.notify.success('Análisis eliminado');
+          this.deletingAnalysisId = null;
+        },
+        error: () => {
+          this.notify.error('Error al eliminar el análisis');
+          this.deletingAnalysisId = null;
+        },
+      });
   }
 
   countByPriority(priority: 'alta' | 'media' | 'baja'): number {
-    return this.tasks.filter((task) => task.prioridad === priority).length;
+    return this.tasks.filter((task) => task.priority === priority).length;
   }
 
   onFiltersChanged(): void {

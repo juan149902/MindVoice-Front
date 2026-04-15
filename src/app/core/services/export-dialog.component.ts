@@ -1,13 +1,29 @@
-import { Component, Input, Output, EventEmitter, signal } from '@angular/core';
-import { NgClass } from '@angular/common';
+import { Component, Input, Output, EventEmitter, signal, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 
 export type ExportFormat = 'png' | 'pdf' | 'docx';
 
+export interface ExportFormatOption {
+  value: ExportFormat;
+  label: string;
+  subtitle: string;
+  icon: string;
+  gradient: string;
+  iconColor: string;
+  borderColor: string;
+}
+
+const DEFAULT_FORMATS: ExportFormatOption[] = [
+  { value: 'png', label: 'PNG', subtitle: 'Imagen', icon: 'image', gradient: 'from-blue-500/20 to-cyan-500/20', iconColor: 'text-blue-400', borderColor: 'border-blue-500/30' },
+  { value: 'pdf', label: 'PDF', subtitle: 'Documento', icon: 'picture_as_pdf', gradient: 'from-rose-500/20 to-orange-500/20', iconColor: 'text-rose-400', borderColor: 'border-rose-500/30' },
+  { value: 'docx', label: 'DOCX', subtitle: 'Word', icon: 'description', gradient: 'from-sky-500/20 to-indigo-500/20', iconColor: 'text-sky-400', borderColor: 'border-sky-500/30' },
+];
+
 @Component({
   selector: 'app-export-dialog',
   standalone: true,
-  imports: [NgClass, MatIconModule],
+  imports: [CommonModule, MatIconModule],
   template: `
     <div class="fixed inset-0 z-50 flex items-center justify-center">
       <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" (click)="cancel()"></div>
@@ -23,54 +39,25 @@ export type ExportFormat = 'png' | 'pdf' | 'docx';
           </button>
         </div>
         
-        <div class="grid grid-cols-3 gap-3 mb-6">
-          <button 
-            type="button"
-            class="flex flex-col items-center gap-3 p-4 rounded-xl border transition-all hover:scale-105"
-            [class.border-primary]="selectedFormat() === 'png'"
-            [class.bg-primary/10]="selectedFormat() === 'png'"
-            [class.border-border-dark]="selectedFormat() !== 'png'"
-            [class.hover:border-primary/50]="selectedFormat() !== 'png'"
-            (click)="selectFormat('png')"
-          >
-            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center border border-blue-500/30">
-              <mat-icon class="text-blue-400">image</mat-icon>
-            </div>
-            <span class="text-sm font-semibold text-gray-200">PNG</span>
-            <span class="text-xs text-gray-500">Imagen</span>
-          </button>
-
-          <button 
-            type="button"
-            class="flex flex-col items-center gap-3 p-4 rounded-xl border transition-all hover:scale-105"
-            [class.border-primary]="selectedFormat() === 'pdf'"
-            [class.bg-primary/10]="selectedFormat() === 'pdf'"
-            [class.border-border-dark]="selectedFormat() !== 'pdf'"
-            [class.hover:border-primary/50]="selectedFormat() !== 'pdf'"
-            (click)="selectFormat('pdf')"
-          >
-            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-rose-500/20 to-orange-500/20 flex items-center justify-center border border-rose-500/30">
-              <mat-icon class="text-rose-400">picture_as_pdf</mat-icon>
-            </div>
-            <span class="text-sm font-semibold text-gray-200">PDF</span>
-            <span class="text-xs text-gray-500">Documento</span>
-          </button>
-
-          <button 
-            type="button"
-            class="flex flex-col items-center gap-3 p-4 rounded-xl border transition-all hover:scale-105"
-            [class.border-primary]="selectedFormat() === 'docx'"
-            [class.bg-primary/10]="selectedFormat() === 'docx'"
-            [class.border-border-dark]="selectedFormat() !== 'docx'"
-            [class.hover:border-primary/50]="selectedFormat() !== 'docx'"
-            (click)="selectFormat('docx')"
-          >
-            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-500/20 to-indigo-500/20 flex items-center justify-center border border-sky-500/30">
-              <mat-icon class="text-sky-400">description</mat-icon>
-            </div>
-            <span class="text-sm font-semibold text-gray-200">DOCX</span>
-            <span class="text-xs text-gray-500">Word</span>
-          </button>
+        <div class="grid gap-3 mb-6" [style.grid-template-columns]="'repeat(' + activeFormats.length + ', 1fr)'">
+          @for (fmt of activeFormats; track fmt.value) {
+            <button 
+              type="button"
+              class="flex flex-col items-center gap-3 p-4 rounded-xl border transition-all hover:scale-105"
+              [class.border-primary]="selectedFormat() === fmt.value"
+              [class.bg-primary/10]="selectedFormat() === fmt.value"
+              [class.border-border-dark]="selectedFormat() !== fmt.value"
+              [class.hover:border-primary/50]="selectedFormat() !== fmt.value"
+              (click)="selectFormat(fmt.value)"
+            >
+              <div class="w-12 h-12 rounded-xl bg-gradient-to-br flex items-center justify-center border"
+                [ngClass]="[fmt.gradient, fmt.borderColor]">
+                <mat-icon [ngClass]="fmt.iconColor">{{ fmt.icon }}</mat-icon>
+              </div>
+              <span class="text-sm font-semibold text-gray-200">{{ fmt.label }}</span>
+              <span class="text-xs text-gray-500">{{ fmt.subtitle }}</span>
+            </button>
+          }
         </div>
 
         <div class="flex gap-3">
@@ -111,12 +98,21 @@ export type ExportFormat = 'png' | 'pdf' | 'docx';
     }
   `]
 })
-export class ExportDialogComponent {
+export class ExportDialogComponent implements OnInit {
   @Input() title = '';
+  @Input() formats: ExportFormatOption[] | null = null;
   @Output() formatSelected = new EventEmitter<ExportFormat>();
   @Output() cancelled = new EventEmitter<void>();
 
+  activeFormats: ExportFormatOption[] = DEFAULT_FORMATS;
   selectedFormat = signal<ExportFormat>('png');
+
+  ngOnInit(): void {
+    this.activeFormats = this.formats ?? DEFAULT_FORMATS;
+    if (this.activeFormats.length > 0) {
+      this.selectedFormat.set(this.activeFormats[0].value);
+    }
+  }
 
   selectFormat(format: ExportFormat): void {
     this.selectedFormat.set(format);

@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { AuthService } from '../../core/services/auth.service';
+import { NotificationService } from '../../core/services/notification.service';
 
 @Component({
   selector: 'app-auth',
@@ -540,6 +541,7 @@ import { AuthService } from '../../core/services/auth.service';
 export class AuthComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly authService = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly notify = inject(NotificationService);
   private readonly botpressInjectScriptId = 'botpress-webchat-inject';
   private readonly botpressConfigScriptId = 'botpress-webchat-config';
   private botpressCleanupTimer: number | null = null;
@@ -681,10 +683,10 @@ export class AuthComponent implements OnInit, OnDestroy, AfterViewInit {
     ).subscribe({
       next: () => {
         this.successMessage = 'Sesión iniciada correctamente.';
+        this.notify.success('Sesión iniciada correctamente');
         void this.router.navigate(['/dashboard']);
       },
       error: (error: HttpErrorResponse) => {
-        console.error('[AUTH] Login failed:', error.status, error.error);
         if (error.status === 401) {
           this.errorMessage = 'Usuario o contraseña incorrectos. Intenta de nuevo.';
         } else if (error.status === 0) {
@@ -697,9 +699,19 @@ export class AuthComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private mapError(error: HttpErrorResponse, fallback: string): string {
-    const backendMessage = error.error?.message;
+    const backendMessage = error.error?.message || error.error?.msg || error.error?.error;
     if (typeof backendMessage === 'string' && backendMessage.trim().length > 0) {
       return backendMessage;
+    }
+
+    if (error.status === 409) {
+      return 'Este usuario o correo ya está registrado. Intenta iniciar sesión.';
+    }
+    if (error.status === 401) {
+      return 'Credenciales incorrectas. Verifica tu usuario y contraseña.';
+    }
+    if (error.status === 0) {
+      return 'No se pudo conectar con el servidor. Verifica tu conexión.';
     }
 
     return fallback;

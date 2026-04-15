@@ -1,15 +1,20 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, OnInit, PLATFORM_ID, computed, inject, signal } from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
 import { AppLanguage, AppPreferencesService, AppTheme, ExportFormat } from '../../core/services/app-preferences.service';
+import { UserService } from '../../core/services/user.service';
 
 @Component({
   selector: 'app-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatIconModule, RouterLink],
   template: `
-    <div class="max-w-[1100px] mx-auto w-full px-6 py-8 space-y-6 premium-page-shell">
+    <div class="max-w-[860px] mx-auto w-full px-6 py-8 space-y-5 premium-page-shell">
+
+      <!-- Header -->
       <section class="premium-page-hero rounded-2xl border border-white/10 bg-gradient-to-br from-primary/20 via-surface-dark/90 to-indigo-900/20 p-6 shadow-[0_24px_60px_rgba(2,6,23,0.45)]">
         <div class="flex items-center gap-4">
           <div class="size-11 rounded-xl border border-primary/30 bg-primary/15 flex items-center justify-center text-primary">
@@ -17,158 +22,241 @@ import { AppLanguage, AppPreferencesService, AppTheme, ExportFormat } from '../.
           </div>
           <div>
             <h2 class="text-white text-2xl font-black leading-tight">{{ t('settings.title') }}</h2>
-            <p class="text-sm text-gray-400 mt-1">{{ t('settings.subtitle') }}</p>
+            <p class="text-sm text-gray-400 mt-0.5">{{ t('settings.subtitle') }}</p>
           </div>
         </div>
       </section>
 
-      <section class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4 hover:border-primary/30 hover:bg-surface-dark/90 transition-all">
-          <h3 class="text-white font-bold flex items-center gap-2">
-            <mat-icon class="text-primary">language</mat-icon>
-            {{ t('settings.language') }}
-          </h3>
-          <select
-            [(ngModel)]="draftLanguage"
-            class="w-full h-11 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-100"
-          >
-            <option value="es">Español</option>
-            <option value="en">English</option>
-          </select>
-          <p class="text-xs text-gray-500">Se aplica en toda la navegación y textos compatibles.</p>
-        </article>
-
-        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4 hover:border-primary/30 hover:bg-surface-dark/90 transition-all">
-          <h3 class="text-white font-bold flex items-center gap-2">
-            <mat-icon class="text-primary">palette</mat-icon>
-            {{ t('settings.theme') }}
-          </h3>
-          <div class="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              class="h-11 rounded-lg border text-sm font-semibold transition-colors"
-              [ngClass]="draftTheme === 'dark'
-                ? 'border-primary/40 bg-primary/15 text-primary'
-                : 'border-border-dark text-gray-300 hover:bg-border-dark/60'"
-              (click)="previewTheme('dark')"
-            >
-              Dark
-            </button>
-            <button
-              type="button"
-              class="h-11 rounded-lg border text-sm font-semibold transition-colors"
-              [ngClass]="draftTheme === 'light'
-                ? 'border-primary/40 bg-primary/15 text-primary'
-                : 'border-border-dark text-gray-300 hover:bg-border-dark/60'"
-              (click)="previewTheme('light')"
-            >
-              Light
-            </button>
+      <!-- Cuenta -->
+      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 overflow-hidden">
+        <div class="flex items-center gap-2 px-5 py-3 border-b border-white/5 bg-white/[0.02]">
+          <mat-icon class="text-primary text-[18px]">person</mat-icon>
+          <h3 class="text-sm font-bold text-white">{{ t('settings.account') }}</h3>
+        </div>
+        <div class="px-5 py-4 flex items-center gap-4">
+          <div class="size-12 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-primary font-black text-lg select-none">
+            {{ initials() }}
           </div>
-        </article>
+          <div class="flex-1 min-w-0">
+            <p class="text-white font-semibold truncate">{{ displayName() }}</p>
+            <p class="text-xs text-gray-400 truncate">{{ displayEmail() }}</p>
+          </div>
+          <a
+            routerLink="/profile"
+            class="h-9 px-4 rounded-lg border border-primary/30 bg-primary/10 text-primary text-sm font-semibold hover:bg-primary/20 transition-colors flex items-center gap-1.5"
+          >
+            <mat-icon class="text-[16px]">edit</mat-icon>
+            {{ t('settings.account.edit') }}
+          </a>
+        </div>
+      </section>
 
-        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4 hover:border-primary/30 hover:bg-surface-dark/90 transition-all">
-          <h3 class="text-white font-bold flex items-center gap-2">
-            <mat-icon class="text-primary">description</mat-icon>
-            {{ t('settings.export') }}
-          </h3>
-          <div class="grid grid-cols-3 gap-2">
+      <!-- Apariencia -->
+      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 overflow-hidden">
+        <div class="flex items-center gap-2 px-5 py-3 border-b border-white/5 bg-white/[0.02]">
+          <mat-icon class="text-primary text-[18px]">palette</mat-icon>
+          <h3 class="text-sm font-bold text-white">{{ t('settings.appearance') }}</h3>
+        </div>
+        <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+
+          <!-- Idioma -->
+          <div class="space-y-2">
+            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+              <mat-icon class="text-[15px]">language</mat-icon>
+              {{ t('settings.language') }}
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="h-11 rounded-lg border text-sm font-semibold transition-all flex items-center justify-center gap-2"
+                [ngClass]="draftLanguage === 'es'
+                  ? 'border-primary/50 bg-primary/15 text-primary shadow-[0_0_12px_rgba(124,58,237,0.2)]'
+                  : 'border-border-dark text-gray-400 hover:border-white/20 hover:text-white'"
+                (click)="draftLanguage = 'es'"
+              >
+                <span class="text-base">🇲🇽</span> Español
+              </button>
+              <button
+                type="button"
+                class="h-11 rounded-lg border text-sm font-semibold transition-all flex items-center justify-center gap-2"
+                [ngClass]="draftLanguage === 'en'
+                  ? 'border-primary/50 bg-primary/15 text-primary shadow-[0_0_12px_rgba(124,58,237,0.2)]'
+                  : 'border-border-dark text-gray-400 hover:border-white/20 hover:text-white'"
+                (click)="draftLanguage = 'en'"
+              >
+                <span class="text-base">🇺🇸</span> English
+              </button>
+            </div>
+          </div>
+
+          <!-- Tema -->
+          <div class="space-y-2">
+            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+              <mat-icon class="text-[15px]">brightness_6</mat-icon>
+              {{ t('settings.theme') }}
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="h-11 rounded-lg border text-sm font-semibold transition-all flex items-center justify-center gap-2"
+                [ngClass]="draftTheme === 'dark'
+                  ? 'border-primary/50 bg-primary/15 text-primary shadow-[0_0_12px_rgba(124,58,237,0.2)]'
+                  : 'border-border-dark text-gray-400 hover:border-white/20 hover:text-white'"
+                (click)="previewTheme('dark')"
+              >
+                <mat-icon class="text-[18px]">dark_mode</mat-icon> Dark
+              </button>
+              <button
+                type="button"
+                class="h-11 rounded-lg border text-sm font-semibold transition-all flex items-center justify-center gap-2"
+                [ngClass]="draftTheme === 'light'
+                  ? 'border-primary/50 bg-primary/15 text-primary shadow-[0_0_12px_rgba(124,58,237,0.2)]'
+                  : 'border-border-dark text-gray-400 hover:border-white/20 hover:text-white'"
+                (click)="previewTheme('light')"
+              >
+                <mat-icon class="text-[18px]">light_mode</mat-icon> Light
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Exportación -->
+      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 overflow-hidden">
+        <div class="flex items-center gap-2 px-5 py-3 border-b border-white/5 bg-white/[0.02]">
+          <mat-icon class="text-primary text-[18px]">file_download</mat-icon>
+          <h3 class="text-sm font-bold text-white">{{ t('settings.export') }}</h3>
+        </div>
+        <div class="p-5 space-y-2">
+          <p class="text-xs text-gray-500">{{ t('settings.export.desc') }}</p>
+          <div class="grid grid-cols-2 gap-2 max-w-xs">
             <button
               type="button"
-              class="h-10 rounded-lg border text-xs font-bold transition-colors"
+              class="h-11 rounded-lg border text-sm font-bold transition-all flex items-center justify-center gap-2"
               [ngClass]="draftExportFormat === 'pdf'
-                ? 'border-primary/40 bg-primary/15 text-primary'
-                : 'border-border-dark text-gray-300 hover:bg-border-dark/60'"
+                ? 'border-primary/50 bg-primary/15 text-primary shadow-[0_0_12px_rgba(124,58,237,0.2)]'
+                : 'border-border-dark text-gray-400 hover:border-white/20 hover:text-white'"
               (click)="draftExportFormat = 'pdf'"
             >
-              PDF
+              <mat-icon class="text-[18px]">picture_as_pdf</mat-icon> PDF
             </button>
             <button
               type="button"
-              class="h-10 rounded-lg border text-xs font-bold transition-colors"
-              [ngClass]="draftExportFormat === 'notion'
-                ? 'border-primary/40 bg-primary/15 text-primary'
-                : 'border-border-dark text-gray-300 hover:bg-border-dark/60'"
-              (click)="draftExportFormat = 'notion'"
+              class="h-11 rounded-lg border text-sm font-bold transition-all flex items-center justify-center gap-2"
+              [ngClass]="draftExportFormat === 'word'
+                ? 'border-primary/50 bg-primary/15 text-primary shadow-[0_0_12px_rgba(124,58,237,0.2)]'
+                : 'border-border-dark text-gray-400 hover:border-white/20 hover:text-white'"
+              (click)="draftExportFormat = 'word'"
             >
-              Notion
-            </button>
-            <button
-              type="button"
-              class="h-10 rounded-lg border text-xs font-bold transition-colors"
-              [ngClass]="draftExportFormat === 'obsidian'
-                ? 'border-primary/40 bg-primary/15 text-primary'
-                : 'border-border-dark text-gray-300 hover:bg-border-dark/60'"
-              (click)="draftExportFormat = 'obsidian'"
-            >
-              Obsidian
+              <mat-icon class="text-[18px]">description</mat-icon> Word
             </button>
           </div>
-        </article>
+        </div>
+      </section>
 
-        <article class="rounded-2xl border border-white/10 bg-surface-dark/80 p-5 space-y-4 hover:border-primary/30 hover:bg-surface-dark/90 transition-all">
-          <div class="flex items-center justify-between rounded-xl border border-border-dark bg-background-dark/50 p-4">
-            <div class="pr-3">
+      <!-- Preferencias -->
+      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 overflow-hidden">
+        <div class="flex items-center gap-2 px-5 py-3 border-b border-white/5 bg-white/[0.02]">
+          <mat-icon class="text-primary text-[18px]">tune</mat-icon>
+          <h3 class="text-sm font-bold text-white">{{ t('settings.preferences') }}</h3>
+        </div>
+        <div class="divide-y divide-white/5">
+
+          <!-- Notificaciones -->
+          <div class="flex items-center justify-between px-5 py-4">
+            <div>
               <p class="text-sm font-semibold text-white">{{ t('settings.notifications') }}</p>
-              <p class="text-xs text-gray-500">Controla avisos y recordatorios del sistema.</p>
+              <p class="text-xs text-gray-500 mt-0.5">{{ t('settings.notifications.desc') }}</p>
             </div>
             <button
               type="button"
-              class="relative w-11 h-6 rounded-full transition-colors"
+              class="relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ml-4"
               [ngClass]="draftNotifications ? 'bg-primary' : 'bg-gray-600'"
               (click)="draftNotifications = !draftNotifications"
+              [attr.aria-pressed]="draftNotifications"
             >
               <span
-                class="absolute top-0.5 size-5 rounded-full bg-white transition-transform"
+                class="absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform"
                 [ngClass]="draftNotifications ? 'translate-x-5' : 'translate-x-0.5'"
               ></span>
             </button>
           </div>
 
-          <div class="flex items-center justify-between rounded-xl border border-border-dark bg-background-dark/50 p-4">
-            <div class="pr-3">
+          <!-- Privacidad -->
+          <div class="flex items-center justify-between px-5 py-4">
+            <div>
               <p class="text-sm font-semibold text-white">{{ t('settings.privacy') }}</p>
-              <p class="text-xs text-gray-500">Reduce exposición de datos en procesos de IA.</p>
+              <p class="text-xs text-gray-500 mt-0.5">{{ t('settings.privacy.desc') }}</p>
             </div>
             <button
               type="button"
-              class="relative w-11 h-6 rounded-full transition-colors"
+              class="relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ml-4"
               [ngClass]="draftPrivacyMode ? 'bg-primary' : 'bg-gray-600'"
               (click)="draftPrivacyMode = !draftPrivacyMode"
+              [attr.aria-pressed]="draftPrivacyMode"
             >
               <span
-                class="absolute top-0.5 size-5 rounded-full bg-white transition-transform"
+                class="absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform"
                 [ngClass]="draftPrivacyMode ? 'translate-x-5' : 'translate-x-0.5'"
               ></span>
             </button>
           </div>
-        </article>
+        </div>
       </section>
 
-      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 p-4 flex flex-wrap items-center justify-end gap-3">
+      <!-- Acerca de -->
+      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 overflow-hidden">
+        <div class="flex items-center gap-2 px-5 py-3 border-b border-white/5 bg-white/[0.02]">
+          <mat-icon class="text-primary text-[18px]">info</mat-icon>
+          <h3 class="text-sm font-bold text-white">{{ t('settings.about') }}</h3>
+        </div>
+        <div class="px-5 py-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">App</p>
+            <p class="text-sm text-white font-semibold mt-1">MindVoice</p>
+          </div>
+          <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Versión</p>
+            <p class="text-sm text-white font-semibold mt-1">1.0.0</p>
+          </div>
+          <div>
+            <p class="text-xs text-gray-500 uppercase tracking-wider">Backend</p>
+            <p class="text-sm text-white font-semibold mt-1 truncate">mindvoice-ai.com</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Barra de acción -->
+      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 px-5 py-4 flex flex-wrap items-center justify-end gap-3">
         @if (savedMessage()) {
-          <p class="text-xs text-emerald-300 mr-auto">{{ savedMessage() }}</p>
+          <p class="text-sm text-emerald-400 mr-auto font-medium">{{ savedMessage() }}</p>
         }
         <button
           type="button"
-          class="h-10 px-4 rounded-lg border border-border-dark text-sm text-gray-300 hover:bg-border-dark/70 transition-colors"
+          class="h-10 px-4 rounded-lg border border-border-dark text-sm text-gray-300 hover:bg-white/5 transition-colors"
           (click)="resetDraft()"
         >
           {{ t('settings.cancel') }}
         </button>
         <button
           type="button"
-          class="h-10 px-5 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary-hover transition-colors"
+          class="h-10 px-6 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary-hover transition-colors shadow-[0_0_18px_rgba(124,58,237,0.3)]"
           (click)="saveChanges()"
         >
-          {{ t('settings.save') }}
+          <span class="flex items-center gap-2">
+            <mat-icon class="text-[18px]">save</mat-icon>
+            {{ t('settings.save') }}
+          </span>
         </button>
       </section>
     </div>
   `,
 })
-export class SettingsComponent {
+export class SettingsComponent implements OnInit {
   private readonly preferences = inject(AppPreferencesService);
+  private readonly userService = inject(UserService);
+  private readonly platformId = inject(PLATFORM_ID);
+
   readonly savedMessage = signal('');
   private persistedTheme: AppTheme = 'dark';
 
@@ -180,10 +268,34 @@ export class SettingsComponent {
 
   private readonly labels = computed(() => this.preferences.labels());
 
+  readonly initials = computed(() => {
+    const user = this.userService.user();
+    const name = user?.name || user?.username || '';
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  });
+
+  readonly displayName = computed(() => {
+    const user = this.userService.user();
+    return user?.name || user?.username || 'Usuario';
+  });
+
+  readonly displayEmail = computed(() => {
+    return this.userService.user()?.email ?? '—';
+  });
+
   constructor() {
     this.preferences.hydrate();
     this.persistedTheme = this.preferences.theme();
     this.resetDraft();
+  }
+
+  ngOnInit(): void {
+    if (isPlatformBrowser(this.platformId) && !this.userService.user()) {
+      this.userService.getProfile().subscribe();
+    }
   }
 
   saveChanges(): void {
@@ -195,7 +307,7 @@ export class SettingsComponent {
     this.persistedTheme = this.draftTheme;
 
     this.savedMessage.set(this.t('settings.saved'));
-    window.setTimeout(() => this.savedMessage.set(''), 2200);
+    setTimeout(() => this.savedMessage.set(''), 2500);
   }
 
   resetDraft(): void {

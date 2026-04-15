@@ -39,7 +39,7 @@ import { NotificationContainerComponent } from '../core/services/notification-co
             </div>
             <div>
               <h1 class="text-white text-lg font-bold leading-tight tracking-tight">MindVoice</h1>
-              <p class="text-gray-500 text-xs">Segundo Cerebro Digital</p>
+              <p class="text-gray-500 text-xs">{{ t('layout.tagline', 'Segundo Cerebro Digital') }}</p>
             </div>
             </div>
 
@@ -59,17 +59,9 @@ import { NotificationContainerComponent } from '../core/services/notification-co
               <mat-icon>dashboard</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.dashboard', 'Panel Principal') }}</p>
             </a>
-            <a routerLink="/ai-analysis" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
-              <mat-icon>insights</mat-icon>
-              <p class="text-sm font-medium">{{ t('nav.aiAnalysis', 'Análisis IA') }}</p>
-            </a>
             <a routerLink="/recordings" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
               <mat-icon>mic</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.recordings', 'Grabaciones') }}</p>
-            </a>
-            <a routerLink="/summaries" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
-              <mat-icon>auto_awesome</mat-icon>
-              <p class="text-sm font-medium">{{ t('nav.summaries', 'Resúmenes IA') }}</p>
             </a>
             <a routerLink="/tasks" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
               <mat-icon>check_box</mat-icon>
@@ -94,7 +86,7 @@ import { NotificationContainerComponent } from '../core/services/notification-co
               <div class="size-9 rounded-full bg-cover ring-2 ring-primary/20" [style.background-image]="'url(https://api.dicebear.com/7.x/avataaars/svg?seed=' + currentUsername() + ')'"></div>
               <div class="overflow-hidden">
                 <p class="text-sm font-bold text-white truncate">{{ currentUsername() }}</p>
-                <p class="text-[10px] text-primary font-bold uppercase tracking-wider">Cuenta Pro</p>
+                <p class="text-[10px] text-primary font-bold uppercase tracking-wider">{{ t('layout.proBadge', 'Cuenta Pro') }}</p>
               </div>
             </div>
 
@@ -142,7 +134,7 @@ import { NotificationContainerComponent } from '../core/services/notification-co
             </button>
             <button class="app-premium-primary-btn hidden h-10 items-center gap-2 rounded-lg px-4 text-sm font-bold text-white transition-all sm:flex">
               <mat-icon class="text-[20px]">sync</mat-icon>
-              <span>Sincronizar</span>
+              <span>{{ t('layout.sync', 'Sincronizar') }}</span>
             </button>
             <button class="app-premium-icon-btn size-10 flex items-center justify-center text-gray-400 rounded-lg transition-colors">
               <mat-icon>notifications</mat-icon>

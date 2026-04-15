@@ -1,22 +1,21 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { Component, OnDestroy, OnInit, PLATFORM_ID, ViewChild, ElementRef, inject, ChangeDetectorRef } from '@angular/core';
-import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { ActivatedRoute } from '@angular/router';
 import { Document, Packer, Paragraph, AlignmentType, HeadingLevel, TextRun } from 'docx';
-import { jsPDF } from 'jspdf';
-import { Observable, Subject, catchError, map, of, switchMap, takeUntil, throwError } from 'rxjs';
+import { Observable, Subject, takeUntil } from 'rxjs';
 import {
   AudioEntity,
   TranscriptionEntity,
   AiAnalysisEntity,
-  AudioWorkflowService,
 } from '../../core/services/audio-workflow.service';
 import { StateManagementService } from '../../core/services/state-management.service';
 import { AudioDownloaderService } from '../../core/services/audio-downloader.service';
-import { AnalysisArtifactsService } from '../../core/services/analysis-artifacts.service';
 import { NotificationService } from '../../core/services/notification.service';
-import { ExportDialogComponent } from '../../core/services/export-dialog.component';
+import { PdfReportService } from '../../core/services/pdf-report.service';
+import { AppPreferencesService } from '../../core/services/app-preferences.service';
+import { ExportDialogComponent, ExportFormatOption } from '../../core/services/export-dialog.component';
 
 interface SummaryDisplay {
   audio?: AudioEntity;
@@ -29,27 +28,40 @@ type SearchFilter = 'all' | 'audio' | 'transcription' | 'analysis';
 @Component({
   selector: 'app-summaries',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, MatIconModule, ExportDialogComponent],
+  imports: [CommonModule, FormsModule, MatIconModule, ExportDialogComponent],
   template: `
-    <div class="p-8 max-w-[1400px] mx-auto w-full space-y-6 premium-page-shell">
+    <div class="p-8 max-w-[1200px] mx-auto w-full space-y-6 premium-page-shell">
       <!-- Header -->
       <section class="premium-page-hero rounded-2xl bg-gradient-to-br from-blue-500/20 via-surface-dark/90 to-cyan-900/20 border border-blue-500/30 p-6 space-y-4 backdrop-blur-sm">
         <div class="flex items-center justify-between gap-4 flex-wrap">
           <div class="space-y-2">
-            <h1 class="text-4xl font-black text-white">Resúmenes Ejecutivos</h1>
-            <p class="text-gray-300 text-sm">Ingesta de audio, transcripciones, análisis IA y generación de documentos estructurados.</p>
+            <h1 class="text-4xl font-black text-white">{{ t('summaries.title') }}</h1>
+            <p class="text-gray-300 text-sm">{{ t('summaries.subtitle') }}</p>
           </div>
-          <button
-            type="button"
-            class="h-11 px-5 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 border border-blue-400/40 text-sm font-semibold text-white hover:shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all duration-300"
-            (click)="refreshData()"
-            [disabled]="(loading$ | async)"
-          >
-            <span class="inline-flex items-center gap-2">
-              <mat-icon class="text-lg" [class.animate-spin]="(loading$ | async)">refresh</mat-icon>
-              {{ (loading$ | async) ? 'Cargando...' : 'Recargar' }}
-            </span>
-          </button>
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border border-purple-400/30 bg-purple-500/15 text-purple-300">
+                {{ (audios$ | async)?.length || 0 }} audios
+              </span>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border border-cyan-400/30 bg-cyan-500/15 text-cyan-300">
+                {{ (transcriptions$ | async)?.length || 0 }} transcripciones
+              </span>
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border border-blue-400/30 bg-blue-500/15 text-blue-300">
+                {{ (analyses$ | async)?.length || 0 }} análisis
+              </span>
+            </div>
+            <button
+              type="button"
+              class="h-11 px-5 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500 border border-blue-400/40 text-sm font-semibold text-white hover:shadow-[0_0_20px_rgba(59,130,246,0.4)] transition-all duration-300"
+              (click)="refreshData()"
+              [disabled]="(loading$ | async)"
+            >
+              <span class="inline-flex items-center gap-2">
+                <mat-icon class="text-lg" [class.animate-spin]="(loading$ | async)">refresh</mat-icon>
+                {{ (loading$ | async) ? t('common.loading') : t('common.reload') }}
+              </span>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -59,322 +71,198 @@ type SearchFilter = 'all' | 'audio' | 'transcription' | 'analysis';
         </section>
       }
 
-      @if (operationMessage) {
-        <section
-          class="rounded-xl border p-4 text-sm backdrop-blur-sm shadow-[0_12px_28px_rgba(2,6,23,0.35)]"
-          [ngClass]="{
-            'border-emerald-500/35 bg-gradient-to-r from-emerald-500/20 to-teal-500/10 text-emerald-100': operationMessageType === 'success',
-            'border-rose-500/35 bg-gradient-to-r from-rose-500/20 to-fuchsia-500/10 text-rose-100': operationMessageType === 'error',
-            'border-sky-500/35 bg-gradient-to-r from-sky-500/20 to-indigo-500/10 text-sky-100': operationMessageType === 'info'
-          }"
-        >
-          <div class="flex items-start gap-2">
-            <mat-icon class="text-base mt-0.5">
-              {{ operationMessageType === 'success' ? 'check_circle' : (operationMessageType === 'error' ? 'error' : 'info') }}
-            </mat-icon>
-            <span class="leading-relaxed">{{ operationMessage }}</span>
-          </div>
-        </section>
-      }
-
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Left Sidebar: Audio Upload & Recording -->
-        <div class="lg:col-span-1 space-y-6">
-          <!-- Audio Upload Card -->
-          <section class="rounded-xl border border-white/10 bg-surface-dark/60 p-6 space-y-4 backdrop-blur-sm">
-            <h2 class="text-lg font-bold text-white flex items-center gap-2">
-              <mat-icon class="text-blue-400">upload_file</mat-icon>
-              Cargar Audio
-            </h2>
-            
-            <div class="space-y-3">
-              <div 
-                class="border-2 border-dashed border-blue-500/30 rounded-lg p-6 text-center cursor-pointer hover:border-blue-500/60 transition-colors"
-                (click)="audioFileInput.click()"
-              >
-                <mat-icon class="text-4xl text-blue-400 mx-auto mb-2">audio_file</mat-icon>
-                <p class="text-sm text-gray-300">Arrastra aquí o haz clic para seleccionar</p>
-                <p class="text-xs text-gray-500 mt-1">MP3, WAV, M4A (máx. 100MB)</p>
-              </div>
-              <input 
-                #audioFileInput 
-                type="file" 
-                accept="audio/*" 
-                style="display: none"
-                (change)="onAudioSelected($event)"
-              />
-              @if (selectedAudioFile) {
-                <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                  <p class="text-sm text-blue-300 truncate">✓ {{ selectedAudioFile.name }}</p>
-                </div>
-              }
-              <button
-                type="button"
-                class="w-full h-10 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 text-sm font-semibold text-white hover:shadow-lg transition-all disabled:opacity-50"
-                (click)="uploadAudio()"
-                [disabled]="!selectedAudioFile || (loading$ | async)"
-              >
-                Subir Audio
-              </button>
-            </div>
-          </section>
-
-          <!-- Recording Card -->
-          <section class="rounded-xl border border-white/10 bg-surface-dark/60 p-6 space-y-4 backdrop-blur-sm">
-            <h2 class="text-lg font-bold text-white flex items-center gap-2">
-              <mat-icon class="text-red-400">mic</mat-icon>
-              Grabar Pensamiento
-            </h2>
-            
-            <div class="space-y-3">
-              @if (!isRecording) {
-                <button
-                  type="button"
-                  class="w-full h-10 rounded-lg bg-gradient-to-r from-red-600 to-red-500 text-sm font-semibold text-white hover:shadow-lg transition-all"
-                  (click)="startRecording()"
-                >
-                  Iniciar Grabación
-                </button>
-              } @else {
-                <div class="space-y-2">
-                  <button
-                    type="button"
-                    class="w-full h-10 rounded-lg bg-gradient-to-r from-yellow-600 to-yellow-500 text-sm font-semibold text-white hover:shadow-lg transition-all"
-                    (click)="stopRecording()"
-                  >
-                    Detener ({{ recordingTime }}s)
-                  </button>
-                  <button
-                    type="button"
-                    class="w-full h-10 rounded-lg bg-gray-700 text-sm font-semibold text-gray-300 hover:bg-gray-600 transition-all"
-                    (click)="cancelRecording()"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              }
-              @if (recordedBlobUrl) {
-                <audio [src]="recordedBlobUrl" controls class="w-full rounded-lg"></audio>
-                <button
-                  type="button"
-                  class="w-full h-10 rounded-lg bg-gradient-to-r from-green-600 to-green-500 text-sm font-semibold text-white hover:shadow-lg transition-all"
-                  (click)="uploadRecordedAudio()"
-                  [disabled]="(loading$ | async)"
-                >
-                  Subir Grabación
-                </button>
-              }
-            </div>
-          </section>
-
-          <!-- Stats Card -->
-          <section class="rounded-xl border border-white/10 bg-surface-dark/60 p-6 space-y-4 backdrop-blur-sm">
-            <h2 class="text-lg font-bold text-white">Estadísticas</h2>
-            <div class="grid grid-cols-3 gap-3">
-              <div class="rounded-lg border border-white/10 bg-background-dark p-3">
-                <p class="text-xs text-gray-400">Audios</p>
-                <p class="text-xl font-bold text-white">{{ (audios$ | async)?.length || 0 }}</p>
-              </div>
-              <div class="rounded-lg border border-white/10 bg-background-dark p-3">
-                <p class="text-xs text-gray-400">Transcripciones</p>
-                <p class="text-xl font-bold text-white">{{ (transcriptions$ | async)?.length || 0 }}</p>
-              </div>
-              <div class="rounded-lg border border-white/10 bg-background-dark p-3">
-                <p class="text-xs text-gray-400">Análisis</p>
-                <p class="text-xl font-bold text-white">{{ (analyses$ | async)?.length || 0 }}</p>
-              </div>
-            </div>
-          </section>
+      <!-- Filters -->
+      <section class="flex flex-wrap items-center gap-3">
+        <div class="relative flex-1 min-w-[200px] max-w-md">
+          <mat-icon class="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm">search</mat-icon>
+          <input
+            id="summary-search"
+            type="text"
+            [(ngModel)]="searchTerm"
+            (ngModelChange)="onFiltersChanged()"
+            class="w-full h-9 rounded-lg bg-white/5 border border-white/10 pl-8 pr-3 text-xs text-gray-200 outline-none focus:border-blue-500/50 placeholder:text-gray-500"
+            [placeholder]="t('summaries.searchPlaceholder')"
+          />
         </div>
+        <select
+          id="summary-filter"
+          [(ngModel)]="typeFilter"
+          (ngModelChange)="onFiltersChanged()"
+          class="h-9 rounded-lg bg-white/5 border border-white/10 px-3 text-xs text-gray-300 outline-none focus:border-blue-500/50"
+        >
+          <option value="all">{{ t('summaries.allFolders') }}</option>
+          <option value="analysis">Solo Análisis IA</option>
+          <option value="transcription">Solo Transcripciones</option>
+          <option value="audio">Solo Audios</option>
+        </select>
+        <span class="text-xs text-gray-500">{{ filteredSummaries.length }} resultado{{ filteredSummaries.length !== 1 ? 's' : '' }}</span>
+      </section>
 
-        <!-- Main Content: Summaries List -->
-        <div class="lg:col-span-2 space-y-6">
-          <!-- Search & Filters -->
-          <section class="rounded-xl border border-white/10 bg-surface-dark/60 p-6 space-y-4 backdrop-blur-sm">
-            <h2 class="text-lg font-bold text-white">Filtros y Búsqueda</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="space-y-1">
-                <label for="summary-search" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Buscar</label>
-                <input
-                  id="summary-search"
-                  type="text"
-                  [(ngModel)]="searchTerm"
-                  (ngModelChange)="onFiltersChanged()"
-                  class="w-full h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-100"
-                  placeholder="Título, etiqueta o ID..."
-                />
-              </div>
-
-              <div class="space-y-1">
-                <label for="summary-filter" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                  Tipo
-                </label>
-                <select
-                  id="summary-filter"
-                  [(ngModel)]="typeFilter"
-                  (ngModelChange)="onFiltersChanged()"
-                  class="w-full h-10 rounded-lg bg-background-dark border border-border-dark px-3 text-sm text-gray-100"
-                >
-                  <option value="all">Todos</option>
-                  <option value="audio">Solo Audios</option>
-                  <option value="transcription">Solo Transcripciones</option>
-                  <option value="analysis">Solo Análisis</option>
-                </select>
-              </div>
-            </div>
-          </section>
-
-          <!-- Summaries Grid -->
-          <section class="rounded-xl border border-white/10 bg-surface-dark/60 p-6 space-y-4 backdrop-blur-sm">
-            @if ((loading$ | async)) {
-              <p class="text-sm text-gray-400 text-center py-12">Cargando resúmenes...</p>
-            } @else if (pagedSummaries.length === 0) {
-              <p class="text-sm text-gray-400 text-center py-12">No hay resúmenes disponibles. Comienza cargando un audio.</p>
-            } @else {
-              <div class="space-y-4">
-                @for (summary of pagedSummaries; track getSummaryId(summary)) {
-                  <div 
-                    class="rounded-lg border bg-background-dark/50 p-5 hover:border-primary/40 transition-all space-y-4"
-                    [class.border-yellow-500]="highlightAudioId && summary.audio?._id === highlightAudioId"
-                    [class.shadow-lg]="highlightAudioId && summary.audio?._id === highlightAudioId"
-                    [class.shadow-yellow-500/20]="highlightAudioId && summary.audio?._id === highlightAudioId"
-                  >
-                    <!-- Summary Header -->
-                    <div class="flex justify-between items-start gap-4">
-                      <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2 mb-2">
-                          @if (summary.analysis && summary.analysis.result.resumen) {
-                            <mat-icon class="text-lg text-blue-400">auto_awesome</mat-icon>
-                            <span class="text-xs font-bold text-blue-400 uppercase tracking-wider">Análisis IA</span>
-                          } @else if (summary.transcription) {
-                            <mat-icon class="text-lg text-cyan-400">description</mat-icon>
-                            <span class="text-xs font-bold text-cyan-400 uppercase tracking-wider">Transcripción</span>
-                          } @else {
-                            <mat-icon class="text-lg text-purple-400">graphic_eq</mat-icon>
-                            <span class="text-xs font-bold text-purple-400 uppercase tracking-wider">Audio</span>
-                          }
-                        </div>
-                        <h3 class="text-lg font-semibold text-white truncate">
-                          {{ getSummaryTitle(summary) }}
-                        </h3>
-                        <p class="text-xs text-gray-500 mt-1">
-                          {{ getSummaryDetails(summary) }}
-                        </p>
-                      </div>
-
-                      <div class="flex gap-2">
-                        @if (summary.audio) {
-                          <button
-                            type="button"
-                            class="p-2 rounded-md text-cyan-300 hover:bg-cyan-500/10 transition-colors"
-                            (click)="playAudio(summary.audio!)"
-                            title="Reproducir audio"
-                          >
-                            <mat-icon>play_circle</mat-icon>
-                          </button>
-                        }
-                        @if (summary.transcription && !summary.analysis) {
-                          <button
-                            type="button"
-                            class="p-2 rounded-md text-blue-300 hover:bg-blue-500/10 transition-colors"
-                            (click)="generateAnalysis(summary.transcription!)"
-                            title="Generar análisis IA"
-                          >
-                            <mat-icon>psychology</mat-icon>
-                          </button>
-                        }
-                        @if (summary.analysis) {
-                          <button
-                            type="button"
-                            class="p-2 rounded-md text-green-300 hover:bg-green-500/10 transition-colors"
-                            (click)="exportToDocument(summary)"
-                            title="Exportar documento"
-                          >
-                            <mat-icon>download</mat-icon>
-                          </button>
-                        }
-                        <button
-                          type="button"
-                          class="p-2 rounded-md text-rose-300 hover:bg-rose-500/10 transition-colors"
-                          (click)="deleteSummary(summary)"
-                          title="Eliminar"
-                        >
-                          <mat-icon>delete</mat-icon>
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Summary Content Preview -->
+      <!-- Results -->
+      <section class="space-y-4">
+        @if ((loading$ | async)) {
+          <div class="rounded-xl border border-white/10 bg-surface-dark/60 p-12 text-center backdrop-blur-sm">
+            <mat-icon class="text-4xl text-gray-600 animate-spin mb-3">refresh</mat-icon>
+            <p class="text-sm text-gray-400">{{ t('common.loading') }}</p>
+          </div>
+        } @else if (summaries.length === 0) {
+          <div class="rounded-xl border border-white/10 bg-surface-dark/60 p-12 text-center backdrop-blur-sm space-y-3">
+            <mat-icon class="text-5xl text-gray-600">auto_awesome</mat-icon>
+            <h3 class="text-lg font-semibold text-gray-300">{{ t('summaries.noSummaries') }}</h3>
+            <p class="text-sm text-gray-500 max-w-md mx-auto">
+              {{ t('summaries.generateAnalysis') }}
+            </p>
+          </div>
+        } @else if (pagedSummaries.length === 0) {
+          <div class="rounded-xl border border-white/10 bg-surface-dark/60 p-8 text-center backdrop-blur-sm">
+            <mat-icon class="text-4xl text-gray-600 mb-2">filter_list_off</mat-icon>
+            <p class="text-sm text-gray-400">{{ t('summaries.noSummaries') }}</p>
+          </div>
+        } @else {
+          @for (summary of pagedSummaries; track getSummaryId(summary)) {
+            <article
+              class="rounded-xl border bg-surface-dark/60 p-5 hover:border-primary/40 transition-all space-y-4 backdrop-blur-sm"
+              [class.border-yellow-500/40]="highlightAudioId && summary.audio?._id === highlightAudioId"
+              [class.shadow-lg]="highlightAudioId && summary.audio?._id === highlightAudioId"
+              [class.shadow-yellow-500/20]="highlightAudioId && summary.audio?._id === highlightAudioId"
+              [class.border-white/10]="!(highlightAudioId && summary.audio?._id === highlightAudioId)"
+            >
+              <!-- Card Header -->
+              <div class="flex justify-between items-start gap-4">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1.5">
                     @if (summary.analysis && summary.analysis.result.resumen) {
-                      <div class="space-y-3">
-                        <p class="text-sm text-gray-300 leading-relaxed line-clamp-3">{{ summary.analysis.result.resumen }}</p>
-                        
-                        @if (summary.analysis.result.temas && summary.analysis.result.temas.length > 0) {
-                          <div class="flex flex-wrap gap-2">
-                            @for (tema of summary.analysis.result.temas.slice(0, 3); track tema) {
-                              <span class="bg-blue-900/30 text-blue-300 text-xs px-2 py-1 rounded-full font-medium border border-blue-500/20">
-                                #{{ tema }}
-                              </span>
-                            }
-                            @if (summary.analysis.result.temas.length > 3) {
-                              <span class="text-xs text-gray-500">+{{ summary.analysis.result.temas.length - 3 }} más</span>
-                            }
-                          </div>
-                        }
-
-                        @if (summary.analysis.result.acciones && summary.analysis.result.acciones.length > 0) {
-                          <div class="bg-white/5 rounded-lg p-3 border border-white/5">
-                            <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Acciones Detectadas</p>
-                            <ul class="space-y-1">
-                              @for (accion of summary.analysis.result.acciones.slice(0, 2); track accion.accion) {
-                                <li class="flex items-start gap-2 text-xs text-gray-300">
-                                  <span class="inline-block w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0"></span>
-                                  <span class="line-clamp-1">{{ accion.accion }} ({{ accion.prioridad }})</span>
-                                </li>
-                              }
-                            </ul>
-                          </div>
-                        }
-                      </div>
+                      <span class="inline-flex items-center gap-1 text-[11px] font-bold text-blue-400 uppercase tracking-wider">
+                        <mat-icon class="text-sm">auto_awesome</mat-icon>
+                        Análisis IA
+                      </span>
                     } @else if (summary.transcription) {
-                      <p class="text-sm text-gray-400 line-clamp-2">{{ summary.transcription.text }}</p>
-                    } @else if (summary.audio) {
-                      <p class="text-sm text-gray-500">Audio: {{ summary.audio.duration }}s</p>
+                      <span class="inline-flex items-center gap-1 text-[11px] font-bold text-cyan-400 uppercase tracking-wider">
+                        <mat-icon class="text-sm">description</mat-icon>
+                        {{ t('summaries.transcription') }}
+                      </span>
+                    } @else {
+                      <span class="inline-flex items-center gap-1 text-[11px] font-bold text-purple-400 uppercase tracking-wider">
+                        <mat-icon class="text-sm">graphic_eq</mat-icon>
+                        Audio
+                      </span>
+                    }
+                    @if (summary.analysis?.result?.sentimiento) {
+                      <span class="text-[10px] px-2 py-0.5 rounded-full border border-white/10 bg-white/5 text-gray-400">
+                        {{ summary.analysis!.result.sentimiento }}
+                      </span>
                     }
                   </div>
-                }
-              </div>
+                  <h3 class="text-base font-semibold text-white truncate">
+                    {{ getSummaryTitle(summary) }}
+                  </h3>
+                  <p class="text-[11px] text-gray-500 mt-0.5">
+                    {{ getSummaryDetails(summary) }}
+                  </p>
+                </div>
 
-              <!-- Pagination -->
-              <div class="pt-4 flex items-center justify-between text-sm text-gray-400 border-t border-white/5">
-                <span>Página {{ currentPage }} de {{ totalPages }}</span>
-                <div class="flex gap-2">
-                  <button
-                    type="button"
-                    class="h-9 px-3 rounded-lg border border-border-dark hover:bg-border-dark/70 disabled:opacity-40"
-                    (click)="previousPage()"
-                    [disabled]="currentPage <= 1"
-                  >
-                    Anterior
-                  </button>
-                  <button
-                    type="button"
-                    class="h-9 px-3 rounded-lg border border-border-dark hover:bg-border-dark/70 disabled:opacity-40"
-                    (click)="nextPage()"
-                    [disabled]="currentPage >= totalPages"
-                  >
-                    Siguiente
+                <div class="flex gap-1 shrink-0">
+                  @if (summary.audio) {
+                    <button type="button" class="p-2 rounded-md text-cyan-300/70 hover:text-cyan-300 hover:bg-cyan-500/10 transition-colors"
+                      (click)="playAudio(summary.audio!)" [title]="t('summaries.expand')">
+                      <mat-icon class="text-lg">play_circle</mat-icon>
+                    </button>
+                  }
+                  @if (summary.transcription && !summary.analysis) {
+                    <button type="button" class="p-2 rounded-md text-blue-300/70 hover:text-blue-300 hover:bg-blue-500/10 transition-colors"
+                      (click)="generateAnalysis(summary.transcription!)" [title]="t('summaries.generateAnalysis')">
+                      <mat-icon class="text-lg">psychology</mat-icon>
+                    </button>
+                  }
+                  @if (summary.analysis) {
+                    <button type="button" class="p-2 rounded-md text-green-300/70 hover:text-green-300 hover:bg-green-500/10 transition-colors"
+                      (click)="exportToDocument(summary)" [title]="t('summaries.exportPDF')">
+                      <mat-icon class="text-lg">download</mat-icon>
+                    </button>
+                  }
+                  <button type="button" class="p-2 rounded-md text-rose-400/50 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                    (click)="deleteSummary(summary)" [title]="t('common.delete')">
+                    <mat-icon class="text-lg">delete_outline</mat-icon>
                   </button>
                 </div>
               </div>
-            }
-          </section>
-        </div>
-      </div>
+
+              <!-- Analysis Content -->
+              @if (summary.analysis && summary.analysis.result.resumen) {
+                <div class="space-y-3">
+                  <p class="text-sm text-gray-300 leading-relaxed line-clamp-3">{{ summary.analysis.result.resumen }}</p>
+                  
+                  @if (summary.analysis.result.temas && summary.analysis.result.temas.length > 0) {
+                    <div class="flex flex-wrap gap-1.5">
+                      @for (tema of summary.analysis.result.temas.slice(0, 4); track tema) {
+                        <span class="bg-blue-900/30 text-blue-300 text-[11px] px-2 py-0.5 rounded-full font-medium border border-blue-500/20">
+                          {{ tema }}
+                        </span>
+                      }
+                      @if (summary.analysis.result.temas.length > 4) {
+                        <span class="text-[11px] text-gray-500">+{{ summary.analysis.result.temas.length - 4 }} más</span>
+                      }
+                    </div>
+                  }
+
+                  @if (summary.analysis.result.acciones && summary.analysis.result.acciones.length > 0) {
+                    <div class="bg-white/[0.03] rounded-lg p-3 border border-white/5">
+                      <p class="text-[11px] font-semibold text-gray-500 uppercase tracking-wider mb-2">{{ t('summaries.extractedTasks') }}</p>
+                      <div class="space-y-1.5">
+                        @for (accion of summary.analysis.result.acciones.slice(0, 3); track accion.accion) {
+                          <div class="flex items-center gap-2 text-xs">
+                            <span class="w-1.5 h-1.5 rounded-full shrink-0"
+                              [class.bg-rose-400]="accion.prioridad === 'alta'"
+                              [class.bg-amber-400]="accion.prioridad === 'media'"
+                              [class.bg-emerald-400]="accion.prioridad !== 'alta' && accion.prioridad !== 'media'"
+                            ></span>
+                            <span class="text-gray-300 line-clamp-1 flex-1">{{ accion.accion }}</span>
+                            <span class="text-[10px] text-gray-500 shrink-0">{{ accion.prioridad }}</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+
+                  <!-- Generate Document button -->
+                  <button type="button"
+                    class="w-full h-9 mt-2 rounded-lg bg-gradient-to-r from-rose-600 to-orange-600 text-white text-xs font-semibold hover:shadow-lg hover:shadow-rose-500/20 transition-all inline-flex items-center justify-center gap-1.5"
+                    (click)="$event.stopPropagation(); exportToDocument(summary)">
+                    <mat-icon class="text-sm">picture_as_pdf</mat-icon>
+                    {{ t('modal.generateDoc') }}
+                  </button>
+                </div>
+              } @else if (summary.transcription) {
+                <p class="text-sm text-gray-400 line-clamp-2">{{ summary.transcription.text }}</p>
+              } @else if (summary.audio) {
+                <p class="text-sm text-gray-500">Audio: {{ summary.audio.duration }}s · {{ summary.audio.format || 'audio' }}</p>
+              }
+            </article>
+          }
+
+          <!-- Pagination -->
+          @if (totalPages > 1) {
+            <div class="pt-2 flex items-center justify-between text-sm text-gray-400">
+              <span>{{ t('common.page') }} {{ currentPage }} {{ t('common.of') }} {{ totalPages }}</span>
+              <div class="flex gap-2">
+                <button type="button" class="h-9 px-3 rounded-lg border border-border-dark hover:bg-border-dark/70 disabled:opacity-40"
+                  (click)="previousPage()" [disabled]="currentPage <= 1">
+                  {{ t('common.prev') }}
+                </button>
+                <button type="button" class="h-9 px-3 rounded-lg border border-border-dark hover:bg-border-dark/70 disabled:opacity-40"
+                  (click)="nextPage()" [disabled]="currentPage >= totalPages">
+                  {{ t('common.next') }}
+                </button>
+              </div>
+            </div>
+          }
+        }
+      </section>
 
       @if (showExportDialog) {
         <app-export-dialog
           [title]="exportDialogTitle"
+          [formats]="summaryExportFormats"
           (formatSelected)="onExportFormatSelected($event)"
           (cancelled)="onExportDialogCancelled()"
         />
@@ -386,18 +274,17 @@ type SearchFilter = 'all' | 'audio' | 'transcription' | 'analysis';
   `,
 })
 export class SummariesComponent implements OnInit, OnDestroy {
-  @ViewChild('audioFileInput') audioFileInput?: ElementRef<HTMLInputElement>;
   @ViewChild('audioPlayer') audioPlayer?: ElementRef<HTMLAudioElement>;
 
   private readonly state = inject(StateManagementService);
-  private readonly audioWorkflow = inject(AudioWorkflowService);
-  private readonly analysisArtifacts = inject(AnalysisArtifactsService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly destroy$ = new Subject<void>();
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly audioDownloader = inject(AudioDownloaderService);
   private readonly route = inject(ActivatedRoute);
   private readonly notifications = inject(NotificationService);
+  private readonly pdfReport = inject(PdfReportService);
+  private readonly preferences = inject(AppPreferencesService);
 
   protected highlightAudioId: string | null = null;
 
@@ -413,17 +300,6 @@ export class SummariesComponent implements OnInit, OnDestroy {
   currentPage = 1;
   readonly pageSize = 6;
 
-  selectedAudioFile: File | null = null;
-  isRecording = false;
-  recordingTime = 0;
-  recordedBlobUrl: string | null = null;
-  private recordedBlob: Blob | null = null;
-  operationMessage = '';
-  operationMessageType: 'success' | 'error' | 'info' = 'info';
-
-  private mediaRecorder: MediaRecorder | null = null;
-  private recordingChunks: Blob[] = [];
-  private recordingInterval: any;
   private allAudios: AudioEntity[] = [];
   private allTranscriptions: TranscriptionEntity[] = [];
   private allAnalyses: AiAnalysisEntity[] = [];
@@ -431,6 +307,12 @@ export class SummariesComponent implements OnInit, OnDestroy {
   showExportDialog = false;
   exportDialogTitle = '';
   selectedSummary: SummaryDisplay | null = null;
+
+  readonly summaryExportFormats: ExportFormatOption[] = [
+    { value: 'pdf', label: 'PDF', subtitle: 'Documento', icon: 'picture_as_pdf', gradient: 'from-rose-500/20 to-orange-500/20', iconColor: 'text-rose-400', borderColor: 'border-rose-500/30' },
+    { value: 'docx', label: 'DOCX', subtitle: 'Word', icon: 'description', gradient: 'from-sky-500/20 to-indigo-500/20', iconColor: 'text-sky-400', borderColor: 'border-sky-500/30' },
+    { value: 'png', label: 'TXT', subtitle: 'Texto plano', icon: 'text_snippet', gradient: 'from-emerald-500/20 to-teal-500/20', iconColor: 'text-emerald-400', borderColor: 'border-emerald-500/30' },
+  ];
 
   ngOnInit(): void {
     if (!isPlatformBrowser(this.platformId)) {
@@ -465,200 +347,8 @@ export class SummariesComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.isRecording) {
-      this.cancelRecording();
-    }
-    if (this.recordingInterval) {
-      clearInterval(this.recordingInterval);
-    }
     this.destroy$.next();
     this.destroy$.complete();
-  }
-
-  onAudioSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const files = input.files;
-    if (files && files.length > 0) {
-      this.selectedAudioFile = files[0];
-    } else {
-      this.selectedAudioFile = null;
-    }
-  }
-
-  uploadAudio(): void {
-    if (!this.selectedAudioFile) return;
-
-    const file = this.selectedAudioFile;
-    this.operationMessage = '';
-    this.operationMessageType = 'info';
-    this.notifications.info(`Procesando audio: ${file.name}...`);
-    
-    this.ingestAudioWithAnalysis(file, file.name, 0, file.type || 'audio/mpeg')
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: () => {
-          this.operationMessage = 'Audio procesado correctamente: análisis, documento y mapa actualizados.';
-          this.operationMessageType = 'success';
-          this.notifications.success('Audio procesado correctamente');
-          this.selectedAudioFile = null;
-          if (this.audioFileInput?.nativeElement) {
-            this.audioFileInput.nativeElement.value = '';
-          }
-          this.cdr.markForCheck();
-        },
-        error: (err) => {
-          const errorMsg = this.resolveAudioErrorMessage(err);
-          this.operationMessage = errorMsg;
-          this.operationMessageType = 'error';
-          this.notifications.error(errorMsg);
-          if (this.audioFileInput?.nativeElement) {
-            this.audioFileInput.nativeElement.value = '';
-          }
-          this.cdr.markForCheck();
-        },
-      });
-  }
-
-  startRecording(): void {
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-      this.mediaRecorder = new MediaRecorder(stream);
-      this.recordingChunks = [];
-      this.recordingTime = 0;
-      this.isRecording = true;
-
-      this.mediaRecorder.ondataavailable = (event: BlobEvent) => {
-        this.recordingChunks.push(event.data);
-      };
-
-      this.mediaRecorder.start();
-
-      this.recordingInterval = setInterval(() => {
-        this.recordingTime++;
-      }, 1000);
-    });
-  }
-
-  stopRecording(): void {
-    if (!this.mediaRecorder) return;
-
-    this.mediaRecorder.onstop = () => {
-      const blob = new Blob(this.recordingChunks, { type: 'audio/webm' });
-      this.recordedBlob = blob;
-      this.recordedBlobUrl = URL.createObjectURL(blob);
-      this.isRecording = false;
-      clearInterval(this.recordingInterval);
-      this.cdr.markForCheck();
-    };
-
-    this.mediaRecorder.stop();
-  }
-
-  cancelRecording(): void {
-    if (this.mediaRecorder) {
-      this.mediaRecorder.stop();
-      this.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
-    }
-    if (this.recordedBlobUrl) {
-      URL.revokeObjectURL(this.recordedBlobUrl);
-    }
-    this.isRecording = false;
-    this.recordingTime = 0;
-    this.recordedBlobUrl = null;
-    this.recordedBlob = null;
-    clearInterval(this.recordingInterval);
-  }
-
-  uploadRecordedAudio(): void {
-    if (!this.recordedBlob) return;
-
-    const fileName = `recording-${Date.now()}.webm`;
-    this.operationMessage = '';
-    this.operationMessageType = 'info';
-    this.notifications.info('Procesando grabación...');
-    
-    this.ingestAudioWithAnalysis(this.recordedBlob, fileName, this.recordingTime, 'audio/webm')
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: () => {
-          this.operationMessage = 'Grabación procesada correctamente: análisis, documento y mapa actualizados.';
-          this.operationMessageType = 'success';
-          this.notifications.success('Grabación procesada correctamente');
-          if (this.recordedBlobUrl) {
-            URL.revokeObjectURL(this.recordedBlobUrl);
-          }
-          this.recordedBlobUrl = null;
-          this.recordedBlob = null;
-          this.recordingTime = 0;
-          this.cdr.markForCheck();
-        },
-        error: (err) => {
-          const errorMsg = this.resolveAudioErrorMessage(err);
-          this.operationMessage = errorMsg;
-          this.operationMessageType = 'error';
-          this.notifications.error(errorMsg);
-          this.cdr.markForCheck();
-        },
-      });
-  }
-
-  private ingestAudioWithAnalysis(
-    audioBlob: Blob,
-    fileName: string,
-    duration: number,
-    format: string,
-  ): Observable<AiAnalysisEntity> {
-    return this.state.createAudio({
-      filePath: fileName,
-      duration,
-      format,
-    }).pipe(
-      switchMap((audio) => {
-        if (!audio._id) {
-          return throwError(() => new Error('El backend creó el audio sin _id.'));
-        }
-        return this.audioWorkflow.analyzeAudio(audioBlob, fileName).pipe(
-          map((aiResult) => ({ audioId: audio._id as string, aiResult })),
-        );
-      }),
-      switchMap(({ audioId, aiResult }) => {
-        const transcriptionText = this.audioWorkflow.extractTranscriptionText(aiResult) || `Transcripción automática de ${fileName}`;
-        return this.state.createTranscription({
-          audioId,
-          text: transcriptionText,
-          timestamps: [],
-        }).pipe(
-          map((transcription) => ({ audioId, transcription, aiResult, transcriptionText })),
-        );
-      }),
-      switchMap(({ audioId, transcription, aiResult, transcriptionText }) => {
-        if (!transcription._id) {
-          return throwError(() => new Error('El backend creó la transcripción sin _id.'));
-        }
-        const structuredPrompt = this.audioWorkflow.buildProfessionalAnalysisPrompt(transcriptionText);
-
-        return this.audioWorkflow.analyzeText(structuredPrompt).pipe(
-          catchError(() => of(aiResult)),
-          switchMap((professionalResult) => this.audioWorkflow.createAnalysisFromMindvoice(
-            transcription._id as string,
-            professionalResult,
-            transcriptionText,
-          )),
-          switchMap((analysis) => this.analysisArtifacts.createProfessionalArtifacts({
-            audioId,
-            audioFileName: fileName,
-            transcriptionId: transcription._id as string,
-            transcriptionText,
-            analysis,
-          }).pipe(
-            map(() => analysis),
-          )),
-          map((analysis) => {
-            this.state.refreshAllData();
-            return analysis;
-          }),
-        );
-      }),
-    );
   }
 
   playAudio(audio: AudioEntity): void {
@@ -682,7 +372,7 @@ export class SummariesComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => this.cdr.markForCheck(),
-        error: (err) => console.error('Error generating analysis:', err),
+        error: (err) => this.notifications.error('Error al generar análisis'),
       });
   }
 
@@ -710,7 +400,7 @@ export class SummariesComponent implements OnInit, OnDestroy {
         break;
       case 'png':
         this.exportToTXT(this.selectedSummary);
-        this.notifications.success('Resumen exportado en TXT');
+        this.notifications.success('Resumen exportado en texto plano');
         break;
     }
     
@@ -725,90 +415,11 @@ export class SummariesComponent implements OnInit, OnDestroy {
   private exportToPDF(summary: SummaryDisplay): void {
     if (!summary.analysis) return;
 
-    const doc = new jsPDF();
-    
-    let yPosition = 20;
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 15;
-    const maxWidth = pageWidth - 2 * margin;
-
-    doc.setFontSize(18);
-    doc.text('RESUMEN EJECUTIVO', margin, yPosition);
-    yPosition += 15;
-
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Resumen:', margin, yPosition);
-    yPosition += 8;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    const resumeLines = doc.splitTextToSize(summary.analysis.result.resumen || '', maxWidth) as string[];
-    resumeLines.forEach((line: string) => {
-      if (yPosition > pageHeight - 20) {
-        doc.addPage();
-        yPosition = 20;
-      }
-      doc.text(line, margin, yPosition);
-      yPosition += 6;
-    });
-
-    yPosition += 5;
-    if (yPosition > pageHeight - 30) {
-      doc.addPage();
-      yPosition = 20;
-    }
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('Temas Identificados:', margin, yPosition);
-    yPosition += 8;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    (summary.analysis.result.temas || []).forEach(tema => {
-      if (yPosition > pageHeight - 20) {
-        doc.addPage();
-        yPosition = 20;
-      }
-      doc.text(`• ${tema}`, margin + 5, yPosition);
-      yPosition += 6;
-    });
-
-    yPosition += 5;
-    if (yPosition > pageHeight - 30) {
-      doc.addPage();
-      yPosition = 20;
-    }
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('Acciones Recomendadas:', margin, yPosition);
-    yPosition += 8;
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(11);
-    (summary.analysis.result.acciones || []).forEach(accion => {
-      if (yPosition > pageHeight - 20) {
-        doc.addPage();
-        yPosition = 20;
-      }
-      doc.text(`• ${accion.accion} (${accion.prioridad})`, margin + 5, yPosition);
-      yPosition += 6;
-    });
-
-    yPosition += 5;
-    if (yPosition > pageHeight - 30) {
-      doc.addPage();
-      yPosition = 20;
-    }
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text(`Sentimiento: ${summary.analysis.result.sentimiento || 'No clasificado'}`, margin, yPosition);
-
-    doc.save(`summary-${summary.analysis._id}.pdf`);
+    this.pdfReport.exportAnalysisReport(
+      summary.analysis,
+      summary.transcription,
+      summary.audio,
+    ).catch(() => this.notifications.error('Error al exportar PDF'));
   }
 
   private exportToDOCX(summary: SummaryDisplay): void {
@@ -904,23 +515,26 @@ ${summary.analysis.result.sentimiento || 'No clasificado'}
 
   deleteSummary(summary: SummaryDisplay): void {
     if (summary.analysis && summary.analysis._id) {
-      if (confirm('¿Eliminar este análisis?')) {
-        this.state.deleteAnalysis(summary.analysis._id)
-          .pipe(takeUntil(this.destroy$))
-          .subscribe();
-      }
+      this.state.deleteAnalysis(summary.analysis._id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: () => this.notifications.success('Análisis eliminado'),
+          error: () => this.notifications.error('Error al eliminar análisis'),
+        });
     } else if (summary.transcription && summary.transcription._id) {
-      if (confirm('¿Eliminar esta transcripción?')) {
-        this.state.deleteTranscription(summary.transcription._id)
-          .pipe(takeUntil(this.destroy$))
-          .subscribe();
-      }
+      this.state.deleteTranscription(summary.transcription._id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: () => this.notifications.success('Transcripción eliminada'),
+          error: () => this.notifications.error('Error al eliminar transcripción'),
+        });
     } else if (summary.audio && summary.audio._id) {
-      if (confirm('¿Eliminar este audio?')) {
-        this.state.deleteAudio(summary.audio._id)
-          .pipe(takeUntil(this.destroy$))
-          .subscribe();
-      }
+      this.state.deleteAudio(summary.audio._id)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: () => this.notifications.success('Audio eliminado'),
+          error: () => this.notifications.error('Error al eliminar audio'),
+        });
     }
   }
 
@@ -1023,6 +637,10 @@ ${summary.analysis.result.sentimiento || 'No clasificado'}
     return parts.join(' · ');
   }
 
+  t(key: string): string {
+    return this.preferences.t(key);
+  }
+
   refreshData(): void {
     this.state.refreshAllData();
   }
@@ -1051,121 +669,5 @@ ${summary.analysis.result.sentimiento || 'No clasificado'}
     if (this.currentPage < 1) {
       this.currentPage = 1;
     }
-  }
-
-  private isTimeoutError(error: unknown): boolean {
-    return error instanceof Error && error.name === 'TimeoutError';
-  }
-
-  private resolveAudioErrorMessage(error: unknown): string {
-    if (this.isTimeoutError(error)) {
-      return 'El análisis de IA tardó más de lo esperado. Intenta de nuevo en unos segundos.';
-    }
-
-    if (this.isMissingAiApiKeyError(error)) {
-      return 'Falta configurar una API key de IA. Define OPENROUTER_API_KEY o GEMINI_API_KEY para continuar.';
-    }
-
-    if (this.isInvalidOpenRouterApiKeyError(error)) {
-      return 'La API key de OpenRouter es inválida o no tiene permisos. Actualiza OPENROUTER_API_KEY o usa GEMINI_API_KEY.';
-    }
-
-    if (this.isOpenRouterCreditsError(error)) {
-      return 'Sin créditos en OpenRouter. Recarga tu saldo en https://openrouter.ai/credits';
-    }
-
-    if (this.isRateLimitError(error)) {
-      return 'Demasiadas solicitudes a OpenRouter. Espera unos segundos e intenta nuevamente.';
-    }
-
-    if (this.isGeminiQuotaError(error)) {
-      return 'Tu proveedor de IA no tiene cuota/crédito disponible. Activa facturación o usa otra API key.';
-    }
-
-    if (this.isServerAudioAnalyzeError(error)) {
-      return 'La API devolvió error al analizar el audio. Ya se intentó modo de compatibilidad automática; intenta nuevamente.';
-    }
-
-    return 'No se pudo procesar el audio con IA. Revisa el formato e intenta nuevamente.';
-  }
-
-  private isOpenRouterCreditsError(error: unknown): boolean {
-    const rawMessage = error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : '';
-    const message = rawMessage.toLowerCase();
-    return message.includes('openrouter_credits_required')
-      || message.includes('insufficient credits')
-      || message.includes('credits');
-  }
-
-  private isRateLimitError(error: unknown): boolean {
-    const rawMessage = error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : '';
-    return rawMessage.toLowerCase().includes('429')
-      || rawMessage.toLowerCase().includes('rate limit');
-  }
-
-  private isMissingAiApiKeyError(error: unknown): boolean {
-    const rawMessage = error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : '';
-    const message = rawMessage.toLowerCase();
-    return message.includes('ai_api_key_missing')
-      || message.includes('openrouter_api_key_missing');
-  }
-
-  private isInvalidOpenRouterApiKeyError(error: unknown): boolean {
-    const rawMessage = error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : '';
-    const message = rawMessage.toLowerCase();
-    return message.includes('openrouter_api_key_invalid')
-      || message.includes('openrouter error 401')
-      || message.includes('openrouter error 403')
-      || message.includes('unauthorized')
-      || message.includes('invalid api key')
-      || message.includes('invalid_api_key');
-  }
-
-  private isGeminiQuotaError(error: unknown): boolean {
-    if (
-      typeof error === 'object'
-      && error !== null
-      && 'status' in error
-      && [402, 429].includes(Number((error as { status?: number }).status))
-    ) {
-      return true;
-    }
-
-    const rawMessage = error instanceof Error
-      ? error.message
-      : typeof error === 'string'
-        ? error
-        : '';
-    const message = rawMessage.toLowerCase();
-    return message.includes('gemini_quota_exceeded')
-      || message.includes('quota')
-      || message.includes('resource_exhausted')
-      || message.includes('rate limit')
-      || message.includes('billing')
-      || message.includes('insufficient credits')
-      || message.includes('payment required');
-  }
-
-  private isServerAudioAnalyzeError(error: unknown): boolean {
-    return typeof error === 'object'
-      && error !== null
-      && 'status' in error
-      && Number((error as { status?: number }).status) === 500;
   }
 }
