@@ -154,54 +154,6 @@ import { UserService } from '../../core/services/user.service';
         </div>
       </section>
 
-      <!-- Preferencias -->
-      <section class="rounded-2xl border border-white/10 bg-surface-dark/80 overflow-hidden">
-        <div class="flex items-center gap-2 px-5 py-3 border-b border-white/5 bg-white/[0.02]">
-          <mat-icon class="text-primary text-[18px]">tune</mat-icon>
-          <h3 class="text-sm font-bold text-white">{{ t('settings.preferences') }}</h3>
-        </div>
-
-        <!-- Notificaciones -->
-        <div class="flex items-center gap-4 px-5 py-4 border-b border-border-dark/40">
-          <div class="size-9 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
-            <mat-icon class="text-violet-400 text-[18px]">notifications</mat-icon>
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-semibold text-white truncate">{{ t('settings.notifications') }}</p>
-            <p class="text-xs text-gray-500 mt-0.5 leading-snug">{{ t('settings.notifications.desc') }}</p>
-          </div>
-          <div
-            class="toggle-track shrink-0 cursor-pointer"
-            [class.toggle-on]="draftNotifications"
-            (click)="draftNotifications = !draftNotifications"
-            [attr.aria-pressed]="draftNotifications"
-            role="switch"
-          >
-            <div class="toggle-thumb"></div>
-          </div>
-        </div>
-
-        <!-- Privacidad -->
-        <div class="flex items-center gap-4 px-5 py-4">
-          <div class="size-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-            <mat-icon class="text-emerald-400 text-[18px]">shield</mat-icon>
-          </div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-semibold text-white truncate">{{ t('settings.privacy') }}</p>
-            <p class="text-xs text-gray-500 mt-0.5 leading-snug">{{ t('settings.privacy.desc') }}</p>
-          </div>
-          <div
-            class="toggle-track shrink-0 cursor-pointer"
-            [class.toggle-on]="draftPrivacyMode"
-            (click)="draftPrivacyMode = !draftPrivacyMode"
-            [attr.aria-pressed]="draftPrivacyMode"
-            role="switch"
-          >
-            <div class="toggle-thumb"></div>
-          </div>
-        </div>
-      </section>
-
       <!-- Acerca de -->
       <section class="rounded-2xl border border-white/10 bg-surface-dark/80 overflow-hidden">
         <div class="flex items-center gap-2 px-5 py-3 border-b border-white/5 bg-white/[0.02]">

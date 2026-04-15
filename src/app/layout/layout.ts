@@ -7,6 +7,7 @@ import { TokenStorageService } from '../core/services/token-storage.service';
 import { AppPreferencesService } from '../core/services/app-preferences.service';
 import { NotificationContainerComponent } from '../core/services/notification-container.component';
 import { UserService } from '../core/services/user.service';
+import { StateManagementService } from '../core/services/state-management.service';
 
 @Component({
   selector: 'app-layout',
@@ -143,9 +144,15 @@ import { UserService } from '../core/services/user.service';
             >
               <mat-icon>{{ theme() === 'light' ? 'light_mode' : 'dark_mode' }}</mat-icon>
             </button>
-            <button class="app-premium-primary-btn hidden h-10 items-center gap-2 rounded-lg px-4 text-sm font-bold text-white transition-all sm:flex">
-              <mat-icon class="text-[20px]">sync</mat-icon>
-              <span>{{ t('layout.sync', 'Sincronizar') }}</span>
+            <button
+              type="button"
+              class="app-premium-primary-btn hidden h-10 items-center gap-2 rounded-lg px-4 text-sm font-bold text-white transition-all sm:flex"
+              [class.opacity-60]="syncing()"
+              [disabled]="syncing()"
+              (click)="syncData()"
+            >
+              <mat-icon class="text-[20px]" [class.animate-spin]="syncing()">sync</mat-icon>
+              <span>{{ syncing() ? t('layout.syncing', 'Sincronizando...') : t('layout.sync', 'Sincronizar') }}</span>
             </button>
             <!-- User avatar — navega al perfil -->
             <button
@@ -174,6 +181,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
   readonly isMobile = signal(false);
   readonly isSidebarOpen = signal(true);
   readonly currentUsername = signal<string>('');
+  readonly syncing = signal(false);
   private readonly botpressInjectScriptId = 'botpress-webchat-inject';
   private readonly botpressConfigScriptId = 'botpress-webchat-config';
   private destroyed = false;
@@ -184,6 +192,7 @@ export class LayoutComponent implements OnInit, OnDestroy {
   private readonly preferences = inject(AppPreferencesService);
   private readonly tokenStorage = inject(TokenStorageService);
   readonly userService = inject(UserService);
+  private readonly stateService = inject(StateManagementService);
   readonly theme = this.preferences.theme;
 
   /** Nombre a mostrar: del backend si ya cargó, si no del token */
@@ -248,6 +257,21 @@ export class LayoutComponent implements OnInit, OnDestroy {
   goToProfile(): void {
     void this.router.navigate(['/profile']);
     if (this.isMobile()) this.closeSidebar();
+  }
+
+  syncData(): void {
+    if (this.syncing()) return;
+    this.syncing.set(true);
+    this.stateService.refreshAllData();
+    // Esperar a que loading$ pase a false para quitar el spinner
+    const sub = this.stateService.loading$.subscribe(loading => {
+      if (!loading) {
+        this.syncing.set(false);
+        sub.unsubscribe();
+      }
+    });
+    // Seguridad: quitar spinner tras 15s máximo
+    setTimeout(() => { this.syncing.set(false); sub.unsubscribe(); }, 15000);
   }
 
   getSidebarClasses(): Record<string, boolean> {
