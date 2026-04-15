@@ -1,4 +1,4 @@
-import { Component, HostListener, OnDestroy, OnInit, PLATFORM_ID, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, PLATFORM_ID, inject, signal, computed } from '@angular/core';
 import { isPlatformBrowser, NgClass, NgIf } from '@angular/common';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -6,6 +6,7 @@ import { AuthService } from '../core/services/auth.service';
 import { TokenStorageService } from '../core/services/token-storage.service';
 import { AppPreferencesService } from '../core/services/app-preferences.service';
 import { NotificationContainerComponent } from '../core/services/notification-container.component';
+import { UserService } from '../core/services/user.service';
 
 @Component({
   selector: 'app-layout',
@@ -86,13 +87,19 @@ import { NotificationContainerComponent } from '../core/services/notification-co
           </nav>
 
           <div class="mt-auto border-t border-border-dark pt-6" [class.hidden]="!isMobile() && !isSidebarOpen()">
-            <div class="flex items-center gap-3 min-w-0">
-              <div class="size-9 rounded-full bg-cover ring-2 ring-primary/20" [style.background-image]="'url(https://api.dicebear.com/7.x/avataaars/svg?seed=' + currentUsername() + ')'"></div>
-              <div class="overflow-hidden">
-                <p class="text-sm font-bold text-white truncate">{{ currentUsername() }}</p>
+            <button
+              type="button"
+              class="flex items-center gap-3 min-w-0 w-full hover:opacity-80 transition-opacity cursor-pointer"
+              (click)="goToProfile()"
+              [title]="t('nav.profile', 'Ver perfil')"
+            >
+              <div class="size-9 rounded-full bg-cover ring-2 ring-primary/20 shrink-0" [style.background-image]="'url(https://api.dicebear.com/7.x/avataaars/svg?seed=' + displayName() + ')'"></div>
+              <div class="overflow-hidden text-left">
+                <p class="text-sm font-bold text-white truncate">{{ displayName() }}</p>
                 <p class="text-[10px] text-primary font-bold uppercase tracking-wider">{{ t('layout.proBadge', 'Cuenta Pro') }}</p>
               </div>
-            </div>
+              <mat-icon class="ml-auto text-gray-500 text-sm shrink-0">chevron_right</mat-icon>
+            </button>
 
             <button
               type="button"
@@ -140,8 +147,17 @@ import { NotificationContainerComponent } from '../core/services/notification-co
               <mat-icon class="text-[20px]">sync</mat-icon>
               <span>{{ t('layout.sync', 'Sincronizar') }}</span>
             </button>
-            <button class="app-premium-icon-btn size-10 flex items-center justify-center text-gray-400 rounded-lg transition-colors">
-              <mat-icon>notifications</mat-icon>
+            <!-- User avatar — navega al perfil -->
+            <button
+              type="button"
+              class="app-premium-icon-btn size-10 flex items-center justify-center rounded-lg overflow-hidden p-0 transition-all hover:ring-2 hover:ring-primary/60"
+              [title]="displayName()"
+              (click)="goToProfile()"
+              aria-label="Ver perfil"
+            >
+              <div class="size-full rounded-lg bg-cover"
+                   [style.background-image]="'url(https://api.dicebear.com/7.x/avataaars/svg?seed=' + displayName() + ')'">
+              </div>
             </button>
           </div>
           </div>
@@ -167,7 +183,16 @@ export class LayoutComponent implements OnInit, OnDestroy {
   private readonly authService = inject(AuthService);
   private readonly preferences = inject(AppPreferencesService);
   private readonly tokenStorage = inject(TokenStorageService);
+  readonly userService = inject(UserService);
   readonly theme = this.preferences.theme;
+
+  /** Nombre a mostrar: del backend si ya cargó, si no del token */
+  readonly displayName = computed(() =>
+    this.userService.user()?.name ||
+    this.userService.user()?.username ||
+    this.currentUsername() ||
+    'Usuario'
+  );
 
   ngOnInit(): void {
     this.destroyed = false;
@@ -177,6 +202,8 @@ export class LayoutComponent implements OnInit, OnDestroy {
 
     if (isPlatformBrowser(this.platformId)) {
       this.loadBotpressChat();
+      // Carga el perfil del backend en background
+      this.userService.getProfile().subscribe({ error: () => {} });
     }
   }
 
@@ -216,6 +243,11 @@ export class LayoutComponent implements OnInit, OnDestroy {
     this.authService.logout();
     this.closeSidebar();
     void this.router.navigate(['/auth']);
+  }
+
+  goToProfile(): void {
+    void this.router.navigate(['/profile']);
+    if (this.isMobile()) this.closeSidebar();
   }
 
   getSidebarClasses(): Record<string, boolean> {
