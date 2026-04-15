@@ -581,6 +581,63 @@ body,
 }
 
 /* ============================================================
+   GLOBAL SELECT — theme-aware
+   ============================================================ */
+
+/* Dark mode (default): normalize native select appearance */
+.app-futuristic-shell select,
+.app-content-shell select {
+  background-color: rgba(16, 8, 29, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  color: #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.25rem 0.6rem;
+  outline: none;
+  appearance: auto;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.app-futuristic-shell select:focus,
+.app-content-shell select:focus {
+  border-color: rgba(167, 139, 250, 0.6);
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2);
+}
+
+.app-futuristic-shell select option,
+.app-content-shell select option {
+  background-color: #160b28;
+  color: #e2e8f0;
+}
+
+/* Light mode: white background, dark text */
+.theme-light .app-futuristic-shell select,
+.theme-light .app-content-shell select,
+.theme-light select {
+  background-color: #ffffff !important;
+  border-color: #d1d5db !important;
+  color: #1e293b !important;
+}
+
+.theme-light .app-futuristic-shell select:focus,
+.theme-light .app-content-shell select:focus {
+  border-color: #7c3aed !important;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.18) !important;
+}
+
+.theme-light .app-futuristic-shell select option,
+.theme-light .app-content-shell select option,
+.theme-light select option {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+}
+
+.theme-light select option:checked,
+.theme-light .app-futuristic-shell select option:checked {
+  background-color: #7c3aed !important;
+  color: #ffffff !important;
+}
+
+/* ============================================================
    LANDING PAGE — siempre modo oscuro, sin importar el tema
    ============================================================ */
 .theme-light .landing-shell .text-violet-200 { color: #ddd6fe !important; }
