@@ -32,8 +32,8 @@ export const routes: Routes = [
       },
       {
         path: 'ai-analysis',
-        redirectTo: 'recordings',
-        pathMatch: 'full',
+        loadComponent: () => import('./pages/ai-analysis/ai-analysis').then((m) => m.AiAnalysisComponent),
+        canActivate: [authGuard],
       },
       {
         path: 'recordings',

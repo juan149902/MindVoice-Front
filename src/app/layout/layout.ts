@@ -63,6 +63,10 @@ import { NotificationContainerComponent } from '../core/services/notification-co
               <mat-icon>mic</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.recordings', 'Grabaciones') }}</p>
             </a>
+            <a routerLink="/ai-analysis" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
+              <mat-icon>auto_awesome</mat-icon>
+              <p class="text-sm font-medium">{{ t('nav.aiAnalysis', 'Análisis IA') }}</p>
+            </a>
             <a routerLink="/tasks" routerLinkActive="app-premium-nav-link-active" class="app-premium-nav-link flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent group" (click)="handleNavClick()">
               <mat-icon>check_box</mat-icon>
               <p class="text-sm font-medium">{{ t('nav.tasks', 'Tareas de Voz') }}</p>
