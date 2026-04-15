@@ -84,8 +84,8 @@ import { CommonModule } from '@angular/common';
                 <a routerLink="/auth" class="cta-primary rounded-2xl px-7 py-3.5 text-white font-extrabold hover:scale-[1.03] transition-all">
                    Probar ahora
                 </a>
-                <a routerLink="/dashboard" class="cta-secondary rounded-2xl px-7 py-3.5 font-semibold transition-all">
-                  Ver demo interna →
+                <a href="#features" class="cta-secondary rounded-2xl px-7 py-3.5 font-semibold transition-all" (click)="scrollToFeatures($event)">
+                  Ver demo →
                 </a>
               </div>
               <div class="trust-row">
@@ -239,7 +239,7 @@ import { CommonModule } from '@angular/common';
                   <img src="icons/Logo1-96.png" alt="MindVoice" class="w-7 h-7 object-cover" />
                   <span>MindVoice © 2026</span>
                 </div>
-                <p>Segundo Cerebro Digital — Hecho con 💜 en Tijuana , choco maldad</p>u
+                <p>Segundo Cerebro Digital — Hecho con 💜 en Tijuana</p>
               </div>
             </footer>
           </div>
@@ -850,6 +850,15 @@ export class LandingComponent implements OnInit, AfterViewInit, OnDestroy {
   constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
 
   toggleMenu() { this.menuOpen = !this.menuOpen; }
+
+  scrollToFeatures(event: Event) {
+    event.preventDefault();
+    if (!isPlatformBrowser(this.platformId)) return;
+    const el = document.getElementById('features');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
 
   ngOnInit() {
     this.destroyed = false;
