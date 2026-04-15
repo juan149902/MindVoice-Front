@@ -581,6 +581,46 @@ body,
 }
 
 /* ============================================================
+   TOGGLE SWITCH — theme-aware (used in settings)
+   ============================================================ */
+.toggle-track {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 9999px;
+  background-color: #4b5563;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+}
+.toggle-track.toggle-on {
+  background-color: #7c3aed;
+}
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background-color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: transform 0.2s ease;
+}
+.toggle-track.toggle-on .toggle-thumb {
+  transform: translateX(20px);
+}
+.theme-light .toggle-track {
+  background-color: #d1d5db;
+}
+.theme-light .toggle-track.toggle-on {
+  background-color: #7c3aed;
+}
+.theme-light .toggle-thumb {
+  background-color: #ffffff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
+/* ============================================================
    GLOBAL SELECT — theme-aware
    ============================================================ */
 

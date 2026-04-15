@@ -57,15 +57,15 @@ import { UserService } from '../../core/services/user.service';
           <mat-icon class="text-primary text-[18px]">palette</mat-icon>
           <h3 class="text-sm font-bold text-white">{{ t('settings.appearance') }}</h3>
         </div>
-        <div class="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div class="p-5 space-y-5">
 
           <!-- Idioma -->
-          <div class="space-y-2">
-            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+          <div>
+            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
               <mat-icon class="text-[15px]">language</mat-icon>
               {{ t('settings.language') }}
             </label>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-2 gap-2 max-w-xs">
               <button
                 type="button"
                 class="h-11 rounded-lg border text-sm font-semibold transition-all flex items-center justify-center gap-2"
@@ -90,12 +90,12 @@ import { UserService } from '../../core/services/user.service';
           </div>
 
           <!-- Tema -->
-          <div class="space-y-2">
-            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+          <div>
+            <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
               <mat-icon class="text-[15px]">brightness_6</mat-icon>
               {{ t('settings.theme') }}
             </label>
-            <div class="grid grid-cols-2 gap-2">
+            <div class="grid grid-cols-2 gap-2 max-w-xs">
               <button
                 type="button"
                 class="h-11 rounded-lg border text-sm font-semibold transition-all flex items-center justify-center gap-2"
@@ -160,46 +160,44 @@ import { UserService } from '../../core/services/user.service';
           <mat-icon class="text-primary text-[18px]">tune</mat-icon>
           <h3 class="text-sm font-bold text-white">{{ t('settings.preferences') }}</h3>
         </div>
-        <div class="divide-y divide-white/5">
 
-          <!-- Notificaciones -->
-          <div class="flex items-center justify-between px-5 py-4">
-            <div>
-              <p class="text-sm font-semibold text-white">{{ t('settings.notifications') }}</p>
-              <p class="text-xs text-gray-500 mt-0.5">{{ t('settings.notifications.desc') }}</p>
-            </div>
-            <button
-              type="button"
-              class="relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ml-4"
-              [ngClass]="draftNotifications ? 'bg-primary' : 'bg-gray-600'"
-              (click)="draftNotifications = !draftNotifications"
-              [attr.aria-pressed]="draftNotifications"
-            >
-              <span
-                class="absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform"
-                [ngClass]="draftNotifications ? 'translate-x-5' : 'translate-x-0.5'"
-              ></span>
-            </button>
+        <!-- Notificaciones -->
+        <div class="flex items-center gap-4 px-5 py-4 border-b border-border-dark/40">
+          <div class="size-9 rounded-lg bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0">
+            <mat-icon class="text-violet-400 text-[18px]">notifications</mat-icon>
           </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-white truncate">{{ t('settings.notifications') }}</p>
+            <p class="text-xs text-gray-500 mt-0.5 leading-snug">{{ t('settings.notifications.desc') }}</p>
+          </div>
+          <div
+            class="toggle-track shrink-0 cursor-pointer"
+            [class.toggle-on]="draftNotifications"
+            (click)="draftNotifications = !draftNotifications"
+            [attr.aria-pressed]="draftNotifications"
+            role="switch"
+          >
+            <div class="toggle-thumb"></div>
+          </div>
+        </div>
 
-          <!-- Privacidad -->
-          <div class="flex items-center justify-between px-5 py-4">
-            <div>
-              <p class="text-sm font-semibold text-white">{{ t('settings.privacy') }}</p>
-              <p class="text-xs text-gray-500 mt-0.5">{{ t('settings.privacy.desc') }}</p>
-            </div>
-            <button
-              type="button"
-              class="relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ml-4"
-              [ngClass]="draftPrivacyMode ? 'bg-primary' : 'bg-gray-600'"
-              (click)="draftPrivacyMode = !draftPrivacyMode"
-              [attr.aria-pressed]="draftPrivacyMode"
-            >
-              <span
-                class="absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform"
-                [ngClass]="draftPrivacyMode ? 'translate-x-5' : 'translate-x-0.5'"
-              ></span>
-            </button>
+        <!-- Privacidad -->
+        <div class="flex items-center gap-4 px-5 py-4">
+          <div class="size-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+            <mat-icon class="text-emerald-400 text-[18px]">shield</mat-icon>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-white truncate">{{ t('settings.privacy') }}</p>
+            <p class="text-xs text-gray-500 mt-0.5 leading-snug">{{ t('settings.privacy.desc') }}</p>
+          </div>
+          <div
+            class="toggle-track shrink-0 cursor-pointer"
+            [class.toggle-on]="draftPrivacyMode"
+            (click)="draftPrivacyMode = !draftPrivacyMode"
+            [attr.aria-pressed]="draftPrivacyMode"
+            role="switch"
+          >
+            <div class="toggle-thumb"></div>
           </div>
         </div>
       </section>
