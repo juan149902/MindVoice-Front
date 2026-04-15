@@ -289,13 +289,76 @@ export class PdfReportService {
       drawDivider();
     }
 
+    // ==================== REPORTE COMPLETO (report_ready_text) ====================
+    const reportText = typeof result.report_ready_text === 'string' ? result.report_ready_text.trim() : '';
+    if (reportText) {
+      sectionHeader('REPORTE COMPLETO');
+      // Strip markdown formatting for PDF
+      const cleanReport = reportText
+        .replace(/^#{1,4}\s+(.+)$/gm, (_, heading) => heading.toUpperCase())
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1');
+      const reportLines = cleanReport.split('\n').filter(l => l.trim());
+      for (const paragraph of reportLines) {
+        const pLines = doc.splitTextToSize(paragraph, contentW - 8);
+        for (const line of pLines) {
+          checkPage(6);
+          // Detect section headings (all uppercase lines)
+          if (line === line.toUpperCase() && line.length < 80 && line.length > 3) {
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor('#1e293b');
+            doc.text(line, margin + 4, y);
+            y += 7;
+          } else {
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(BRAND.slate700);
+            doc.text(line, margin + 4, y);
+            y += 5.5;
+          }
+        }
+        y += 3;
+      }
+      y += 4;
+      drawDivider();
+    }
+
     // ==================== TRANSCRIPCION ====================
+    const tsWithTimestamps = Array.isArray(result.transcription_with_timestamps)
+      ? result.transcription_with_timestamps.filter(t => t.text?.trim())
+      : [];
     const transcriptionText = transcription?.text
       || result._originalTranscription
       || result.edited_text
       || '';
 
-    if (transcriptionText.trim()) {
+    if (tsWithTimestamps.length > 0) {
+      sectionHeader('TRANSCRIPCIÓN');
+      for (const segment of tsWithTimestamps) {
+        checkPage(10);
+        // Timestamp badge
+        const ts = `[${segment.start} - ${segment.end}]`;
+        doc.setFontSize(8);
+        doc.setFont('courier', 'bold');
+        doc.setTextColor(BRAND.purple);
+        doc.text(ts, margin + 4, y);
+        // Text
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(BRAND.slate700);
+        doc.setFontSize(9);
+        const segLines = doc.splitTextToSize(segment.text, contentW - 40);
+        doc.text(segLines[0] || '', margin + 35, y);
+        y += 5;
+        for (let i = 1; i < segLines.length; i++) {
+          checkPage(5);
+          doc.text(segLines[i], margin + 35, y);
+          y += 5;
+        }
+        y += 2;
+      }
+      y += 4;
+    } else if (transcriptionText.trim()) {
       sectionHeader('TRANSCRIPCIÓN ORIGINAL');
       doc.setFontSize(9);
       doc.setFont('helvetica', 'italic');
@@ -322,24 +385,27 @@ export class PdfReportService {
       doc.text(`Página ${i} de ${totalPages}`, pageW - margin, pageH - 4, { align: 'right' });
     }
 
-    // ==================== SAVE ====================
+    // ==================== DOWNLOAD (force file download, never preview) ====================
     const fileName = `MindVoice_Report_${Date.now()}.pdf`;
-    console.log('[PdfReport] Saving PDF:', fileName);
+    console.log('[PdfReport] Downloading PDF:', fileName);
     try {
-      doc.save(fileName);
-      console.log('[PdfReport] doc.save() completed');
-    } catch (saveErr) {
-      console.warn('[PdfReport] doc.save() failed, using fallback:', saveErr);
-      // Fallback: open as blob URL in new tab if save() fails
       const blob = doc.output('blob');
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
+      a.style.display = 'none';
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      // Cleanup after a brief delay
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 3000);
+      console.log('[PdfReport] Download triggered for:', fileName);
+    } catch (downloadErr) {
+      console.error('[PdfReport] Download failed, trying doc.save():', downloadErr);
+      doc.save(fileName);
     }
   }
 }

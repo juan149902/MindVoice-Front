@@ -187,7 +187,7 @@ interface AnalysisRow {
                       type="button"
                       class="h-9 px-4 rounded-lg bg-gradient-to-r from-rose-600 to-orange-600 text-white text-xs font-semibold hover:shadow-lg hover:shadow-rose-500/20 transition-all inline-flex items-center gap-1.5 disabled:opacity-50"
                       [disabled]="generatingDocId === row.analysisId"
-                      (click)="generateDocument(row)">
+                      (click)="$event.stopPropagation(); generateDocument(row)">
                       <mat-icon class="text-base" [class.animate-spin]="generatingDocId === row.analysisId">
                         {{ generatingDocId === row.analysisId ? 'sync' : 'picture_as_pdf' }}
                       </mat-icon>
@@ -196,7 +196,7 @@ interface AnalysisRow {
                     <button
                       type="button"
                       class="h-9 px-3 rounded-lg border border-white/15 text-xs text-gray-200 hover:bg-white/5 transition-colors inline-flex items-center gap-1.5"
-                      (click)="toggleExpand(row.analysisId)"
+                      (click)="$event.stopPropagation(); toggleExpand(row.analysisId)"
                     >
                       <mat-icon class="text-base">{{ expandedId === row.analysisId ? 'expand_less' : 'expand_more' }}</mat-icon>
                       {{ expandedId === row.analysisId ? t('aiAnalysis.collapse') : t('aiAnalysis.expand') }}
@@ -356,16 +356,16 @@ interface AnalysisRow {
                       type="button"
                       class="h-9 px-4 rounded-lg bg-gradient-to-r from-rose-600 to-orange-600 text-white text-xs font-semibold hover:shadow-lg hover:shadow-rose-500/20 transition-all inline-flex items-center gap-1.5 disabled:opacity-50"
                       [disabled]="generatingDocId === row.analysisId"
-                      (click)="generateDocument(row)">
+                      (click)="$event.stopPropagation(); generateDocument(row)">
                       <mat-icon class="text-base" [class.animate-spin]="generatingDocId === row.analysisId">
                         {{ generatingDocId === row.analysisId ? 'sync' : 'picture_as_pdf' }}
                       </mat-icon>
                       {{ t('modal.generateDoc') }}
                     </button>
-                    <button type="button" class="h-9 px-3 rounded-lg border border-white/15 text-xs text-gray-200 hover:bg-white/5" (click)="goToSummaries(row.audioId)">
+                    <button type="button" class="h-9 px-3 rounded-lg border border-white/15 text-xs text-gray-200 hover:bg-white/5" (click)="$event.stopPropagation(); goToSummaries(row.audioId)">
                       {{ t('aiAnalysis.goToSummaries') }}
                     </button>
-                    <button type="button" class="h-9 px-3 rounded-lg border border-primary/40 text-primary text-xs font-semibold hover:bg-primary/10" (click)="goToMindmaps(row.audioId)">
+                    <button type="button" class="h-9 px-3 rounded-lg border border-primary/40 text-primary text-xs font-semibold hover:bg-primary/10" (click)="$event.stopPropagation(); goToMindmaps(row.audioId)">
                       {{ t('aiAnalysis.viewMaps') }}
                     </button>
                   </div>
@@ -661,6 +661,7 @@ export class AiAnalysisComponent implements OnInit, OnDestroy {
 
   async generateDocument(row: AnalysisRow): Promise<void> {
     console.log('[AI-Analysis] generateDocument called for:', row.analysisId);
+    if (this.generatingDocId) return; // prevent double-click
     this.generatingDocId = row.analysisId;
     this.successMessage = '';
 
@@ -684,6 +685,7 @@ export class AiAnalysisComponent implements OnInit, OnDestroy {
       if (!analysis) {
         console.error('[AI-Analysis] Analysis not found for id:', row.analysisId);
         this.successMessage = '❌ No se encontró el análisis';
+        this.generatingDocId = '';
         return;
       }
 
@@ -692,22 +694,24 @@ export class AiAnalysisComponent implements OnInit, OnDestroy {
         ? this.currentAudios.find(a => a._id === transcription.audioId)
         : undefined;
 
-      console.log('[AI-Analysis] Generating PDF with:', {
+      console.log('[PdfReport] Generating with data:', {
         analysisId: analysis._id,
-        hasResult: !!analysis.result,
-        hasResumen: !!analysis.result?.resumen,
-        hasExecSummary: !!analysis.result?.executive_summary,
+        hasExecSummary: !!analysis.result?.executive_summary?.length,
         hasReportText: !!analysis.result?.report_ready_text,
+        hasTasks: !!analysis.result?.task_list?.length,
+        hasInsights: !!analysis.result?.key_insights?.length,
       });
 
       await this.pdfService.exportAnalysisReport(analysis, transcription, audio);
-      this.successMessage = this.t('aiAnalysis.docGenerated') || '✅ Documento generado exitosamente';
-      console.log('[AI-Analysis] PDF generated successfully!');
+      this.successMessage = '✅ Documento descargado exitosamente';
+      console.log('[AI-Analysis] PDF downloaded successfully!');
     } catch (err) {
       console.error('[AI-Analysis] Error generating document:', err);
       this.successMessage = `❌ Error al generar: ${err instanceof Error ? err.message : 'Error desconocido'}`;
     } finally {
       this.generatingDocId = '';
+      // Auto-clear success message after 5 seconds
+      setTimeout(() => { if (this.successMessage.startsWith('✅')) this.successMessage = ''; }, 5000);
     }
   }
 
