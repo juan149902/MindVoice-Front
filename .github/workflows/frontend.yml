@@ -1,0 +1,41 @@
+name: Frontend CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Clonar repo
+      uses: actions/checkout@v4
+
+    - name: Instalar Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Instalar dependencias
+      run: npm install
+
+    - name: Build Angular
+      run: npm run build -- --configuration production
+
+    - name: Deploy (SSH)
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ubuntu
+        key: ${{ secrets.SSH_KEY }}
+        script: |
+          cd ~/MindVoice-Front
+          git pull origin main
+          docker build -t mindvoice-front .
+          docker rm -f frontend || true
+          docker run -d \
+            --name frontend \
+            --network mindvoice-net \
+            --restart always \
+            mindvoice-front
