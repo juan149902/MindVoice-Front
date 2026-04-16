@@ -1,0 +1,30 @@
+name: Deploy Frontend
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Clonar repo
+      uses: actions/checkout@v4
+
+    - name: Deploy en servidor
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ubuntu
+        key: ${{ secrets.SSH_KEY }}
+        script: |
+          cd ~/MindVoice-Front
+          git pull origin main
+          docker build -t mindvoice-front .
+          docker rm -f frontend || true
+          docker run -d \
+            --name frontend \
+            --network mindvoice-net \
+            --restart always \
+            mindvoice-front
