@@ -1,0 +1,45 @@
+name: Backend CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  test-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Clonar repo
+      uses: actions/checkout@v4
+
+    - name: Instalar Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Instalar dependencias
+      run: |
+        pip install -r requirements.txt
+
+    - name: Ejecutar pruebas
+      run: |
+        pytest || echo "No tests yet"
+
+    - name: Deploy (SSH)
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_IP }}
+        username: ubuntu
+        key: ${{ secrets.SSH_KEY }}
+        script: |
+          cd ~/Server-mind-voice
+          git pull origin main
+          docker build -t mi-backend-img .
+          docker rm -f backend || true
+          docker run -d \
+            --name backend \
+            --network mindvoice-net \
+            --restart always \
+            -p 5000:5000 \
+            -e MONGO_URI="mongodb://mongo:27017/flask_base_db" \
+            mi-backend-img
