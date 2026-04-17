@@ -72,7 +72,7 @@ export const authGuard: CanActivateFn = (route, state) => {
   // Si no hay token, redirigir a login
   if (!token) {
     console.log('[AuthGuard] No token found, redirecting to /auth');
-    return router.createUrlTree(['/auth'], {
+    return router.createUrlTree(['/auth/login'], {
       queryParams: { returnUrl: state.url }
     });
   }
@@ -82,7 +82,7 @@ export const authGuard: CanActivateFn = (route, state) => {
     console.log('[AuthGuard] Token expired, clearing and redirecting to /auth');
     tokenStorage.clearToken();
     tokenStorage.clearUsername();
-    return router.createUrlTree(['/auth'], {
+    return router.createUrlTree(['/auth/login'], {
       queryParams: { 
         returnUrl: state.url,
         expired: 'true'
